@@ -1,0 +1,166 @@
+<%- include('partials/head', { title: player.username }) %>
+
+<div class="event-hero">
+  <div>
+    <h1>👤 <%= player.username %></h1>
+    <p class="muted"><%= tournamentCount %> tournoi<%= tournamentCount > 1 ? 's' : '' %> joué<%= tournamentCount > 1 ? 's' : '' %> · membre depuis le <%= player.createdAt.toLocaleDateString('fr-FR') %></p>
+  </div>
+</div>
+
+<div class="stat-tiles">
+  <div class="stat-tile"><span class="stat-value">🏆 <%= cups.length %></span><span class="stat-label">Coupes</span></div>
+  <div class="stat-tile"><span class="stat-value"><%= summary.wins %>-<%= summary.draws %>-<%= summary.losses %></span><span class="stat-label">Matchs V-N-D</span></div>
+  <div class="stat-tile"><span class="stat-value"><%= (summary.winRate * 100).toFixed(1) %>%</span><span class="stat-label">Win rate matchs</span></div>
+  <div class="stat-tile"><span class="stat-value"><%= summary.gameWins %>-<%= summary.gameDraws %>-<%= summary.gameLosses %></span><span class="stat-label">Manches V-N-D</span></div>
+  <div class="stat-tile"><span class="stat-value"><%= (summary.gameWinRate * 100).toFixed(1) %>%</span><span class="stat-label">GW%</span></div>
+</div>
+
+<% if (cups.length > 0) { %>
+  <div class="card">
+    <h2>🏆 Palmarès</h2>
+    <ul class="cup-list">
+    <% for (const c of cups) { %>
+      <li><a href="/tournaments/<%= c.tournamentId %>"><%= c.name %></a> — <%= c.date.toLocaleDateString('fr-FR') %> avec « <%= c.deckName %> »</li>
+    <% } %>
+    </ul>
+  </div>
+<% } %>
+
+<!-- Résultats officiels (locator UVS) -->
+<div class="card locator-card">
+  <div class="page-head">
+    <h2>🌍 Résultats officiels <span class="muted">(locator UVS)</span></h2>
+    <% if (isMe) { %>
+      <% if (locatorInfo) { %>
+        <div class="row-actions">
+          <form method="post" action="/locator/import" class="inline"><button class="btn btn-gold">Importer mes résultats</button></form>
+          <form method="post" action="/locator/disconnect" class="inline" onsubmit="return confirm('Déconnecter le compte locator ? Les événements déjà importés sont conservés.')"><button class="btn btn-ghost">Déconnecter</button></form>
+        </div>
+      <% } %>
+    <% } %>
+  </div>
+
+  <% if (isMe && !locatorInfo) { %>
+    <p class="muted">Lie ton compte <a href="https://locator.riftbound.uvsgames.com/" target="_blank" rel="noopener">locator UVS</a> pour importer automatiquement tes résultats d'événements officiels et le deck joué. <a href="/locator" class="btn btn-gold btn-small">Lier avec le locator</a></p>
+  <% } else if (isMe && locatorInfo) { %>
+    <p class="muted">Connecté en tant que <%= locatorInfo.email %><% if (locatorInfo.lastImportAt) { %> · dernier import le <%= locatorInfo.lastImportAt.toLocaleString('fr-FR') %><% } else { %> · aucun import pour l'instant<% } %>.</p>
+  <% } %>
+
+  <% if (externalEvents.length > 0) { %>
+    <div class="stat-tiles">
+      <div class="stat-tile"><span class="stat-value"><%= external.total.events %></span><span class="stat-label">Événements</span></div>
+      <div class="stat-tile"><span class="stat-value"><%= external.total.wins %>-<%= external.total.draws %>-<%= external.total.losses %></span><span class="stat-label">Matchs V-N-D</span></div>
+      <div class="stat-tile"><span class="stat-value"><%= (external.total.winRate * 100).toFixed(1) %>%</span><span class="stat-label">Win rate</span></div>
+      <div class="stat-tile"><span class="stat-value"><%= external.total.gameWins %>-<%= external.total.gameLosses %></span><span class="stat-label">Manches V-D</span></div>
+      <div class="stat-tile"><span class="stat-value">🥇 <%= external.total.top %></span><span class="stat-label">Top 3</span></div>
+    </div>
+
+    <h3>Par deck joué</h3>
+    <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Deck</th><th>Événements</th><th>V-N-D</th><th>Win rate</th></tr></thead>
+      <tbody>
+      <% for (const d of external.decks) { %>
+        <tr>
+          <td>
+            <% if (d.image) { %><img class="deck-mini" src="<%= d.image %>" alt=""><% } %>
+            <% if (d.deckId) { %><a href="/decks/<%= d.deckId %>"><%= d.name %></a><% } else { %><%= d.name %><% } %>
+            <% if (d.legend) { %><span class="muted deck-tag"><%= d.legend %></span><% } %>
+          </td>
+          <td><%= d.events %></td>
+          <td><%= d.wins %>-<%= d.draws %>-<%= d.losses %></td>
+          <td><span class="rate-bar"><span class="rate-fill" style="width: <%= (d.winRate * 100).toFixed(0) %>%"></span></span><%= (d.winRate * 100).toFixed(1) %>%</td>
+        </tr>
+      <% } %>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>Événements</h3>
+    <div class="ext-events">
+    <% for (const ev of externalEvents) { %>
+      <details class="ext-event">
+        <summary>
+          <span class="ext-date muted"><%= ev.date ? ev.date.toLocaleDateString('fr-FR') : '—' %></span>
+          <strong><%= ev.name %></strong>
+          <% if (ev.store) { %><span class="muted">· <%= ev.store %></span><% } %>
+          <span class="ext-record"><%= ev.wins %>-<%= ev.draws %>-<%= ev.losses %></span>
+          <% if (ev.finalPlace) { %><span class="ext-place"><%= ev.finalPlace %><sup>e</sup><% if (ev.participants) { %>/<%= ev.participants %><% } %></span><% } %>
+          <% if (ev.deck) { %><span class="muted deck-tag"><%= ev.matchedDeck ? ev.matchedDeck.deckName : ev.deck.name || ev.deck.archetype || '' %></span><% } %>
+        </summary>
+        <div class="ext-body">
+          <% if (isMe) { %>
+            <form method="post" action="/locator/events/<%= ev._id %>/deck" class="ext-deck-form">
+              <label>Deck joué (dans l'outil)
+                <select name="deckId">
+                  <option value="">— non associé —</option>
+                  <% for (const d of myDecks) { %><option value="<%= d._id %>" <%= ev.matchedDeck && String(ev.matchedDeck.deckId) === String(d._id) ? 'selected' : '' %>><%= d.name %></option><% } %>
+                </select>
+              </label>
+              <button class="btn btn-ghost btn-small">Associer</button>
+              <% if (ev.deck && (ev.deck.name || ev.deck.definingCard)) { %><span class="muted">Locator : <%= ev.deck.name || '' %><%= ev.deck.definingCard ? ' (' + ev.deck.definingCard.name + ')' : '' %></span><% } %>
+            </form>
+          <% } %>
+          <table class="table">
+            <thead><tr><th>Ronde</th><th>Adversaire</th><th>Score</th><th>Résultat</th></tr></thead>
+            <tbody>
+            <% for (const m of ev.matches) { %>
+              <tr>
+                <td><%= m.round %></td>
+                <td><%= m.outcome === 'bye' ? '—' : m.oppName || '?' %></td>
+                <td><%= m.outcome === 'bye' ? '—' : m.gamesWon + '-' + m.gamesLost %></td>
+                <td>
+                  <% if (m.outcome === 'win') { %><span class="result-chip win">Victoire</span>
+                  <% } else if (m.outcome === 'loss') { %><span class="result-chip loss">Défaite</span>
+                  <% } else if (m.outcome === 'draw') { %><span class="result-chip draw">Nul</span>
+                  <% } else if (m.outcome === 'bye') { %><span class="result-chip win">Bye ✓</span>
+                  <% } else { %><span class="muted">?</span><% } %>
+                </td>
+              </tr>
+            <% } %>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    <% } %>
+    </div>
+  <% } else if (!isMe) { %>
+    <p class="muted">Aucun résultat officiel importé.</p>
+  <% } %>
+</div>
+
+<div class="card">
+  <h2>Historique des matchs <span class="muted">(tournois internes)</span></h2>
+  <% if (history.length === 0) { %>
+    <div class="empty">Aucun match joué pour l'instant.</div>
+  <% } else { %>
+  <div class="table-scroll">
+  <table class="table">
+    <thead><tr><th>Date</th><th>Tournoi</th><th>Ronde</th><th>Mon deck</th><th>Adversaire</th><th>Score</th><th>Résultat</th></tr></thead>
+    <tbody>
+    <% for (const h of history) { %>
+      <tr>
+        <td class="muted"><%= h.date.toLocaleDateString('fr-FR') %></td>
+        <td><a href="/tournaments/<%= h.tournamentId %>"><%= h.tournamentName %></a></td>
+        <td><%= h.round %></td>
+        <td class="muted"><%= h.myDeck %></td>
+        <td>
+          <% if (h.bye) { %><em class="muted">BYE</em>
+          <% } else { %><a href="/players/<%= h.oppId %>"><%= h.oppName %></a> <span class="muted deck-tag"><%= h.oppDeck %></span><% } %>
+        </td>
+        <td><%= h.bye ? '—' : h.score %></td>
+        <td>
+          <% if (h.outcome === 'win') { %><span class="result-chip win">Victoire</span>
+          <% } else if (h.outcome === 'loss') { %><span class="result-chip loss">Défaite</span>
+          <% } else if (h.outcome === 'draw') { %><span class="result-chip draw">Nul</span>
+          <% } else { %><span class="result-chip win">Bye ✓</span><% } %>
+        </td>
+      </tr>
+    <% } %>
+    </tbody>
+  </table>
+  </div>
+  <% } %>
+</div>
+
+<%- include('partials/foot') %>

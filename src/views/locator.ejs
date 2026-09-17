@@ -1,0 +1,44 @@
+<%- include('partials/head', { title: 'Lier avec le locator' }) %>
+
+<div class="card card-medium locator-page">
+  <h1>🌍 Lier avec le locator</h1>
+  <p class="muted">Le <a href="https://locator.riftbound.uvsgames.com/" target="_blank" rel="noopener">locator UVS</a> garde l'historique de tes événements officiels : rondes, adversaires, scores et deck joué. Une fois lié, un bouton « Importer mes résultats » sur ta page joueur récupère tout ça pour tes stats.</p>
+
+  <% if (locatorInfo) { %>
+    <div class="flash flash-success">
+      Compte lié : <strong><%= locatorInfo.email %></strong> (depuis le <%= locatorInfo.connectedAt.toLocaleDateString('fr-FR') %>)
+      <% if (locatorInfo.lastImportAt) { %> · dernier import le <%= locatorInfo.lastImportAt.toLocaleString('fr-FR') %><% } %>
+      · <%= eventCount %> événement(s) importé(s).
+    </div>
+    <div class="row-actions">
+      <form method="post" action="/locator/import" class="inline"><button class="btn btn-gold">Importer mes résultats</button></form>
+      <a href="/players/<%= currentUser.id %>" class="btn btn-ghost">Ma page joueur</a>
+      <form method="post" action="/locator/disconnect" class="inline" onsubmit="return confirm('Déconnecter le compte locator ? Les événements déjà importés sont conservés.')"><button class="btn btn-danger">Déconnecter</button></form>
+    </div>
+  <% } else { %>
+
+    <h2>Méthode 1 — Email et mot de passe UVS <span class="muted">(recommandée)</span></h2>
+    <p class="muted">Le mot de passe sert uniquement à obtenir un jeton auprès de l'API du locator ; il n'est jamais enregistré. Le jeton est stocké chiffré et supprimé à la déconnexion.</p>
+    <div class="locator-google-note">
+      <strong>Tu te connectes avec Google sur le locator ?</strong> Ton compte UVS n'a probablement pas de mot de passe. Clique sur <em>« Forgot your password? »</em> sur la <a href="https://locator.riftbound.uvsgames.com/login" target="_blank" rel="noopener">page de connexion du locator</a>, saisis l'email de ton compte Google : tu recevras un lien pour définir un mot de passe. Le compte reste le même (et « Sign in with Google » continue de marcher).
+    </div>
+    <form method="post" action="/locator/connect" class="locator-form">
+      <label>Email UVS <input type="email" name="email" required autocomplete="off" placeholder="player@email.com"></label>
+      <label>Mot de passe UVS <input type="password" name="password" required autocomplete="off"></label>
+      <button class="btn btn-gold">Connecter</button>
+    </form>
+
+    <details class="advanced">
+      <summary class="muted">Méthode 2 — coller un jeton de session (avancé)</summary>
+      <p class="muted">Si tu préfères ne pas définir de mot de passe : connecte-toi au locator (avec Google), ouvre les outils de développement du navigateur (F12 → onglet <em>Application</em> / <em>Stockage</em> → Cookies), copie la valeur du cookie <code>sessionid</code> du domaine <code>uvsgames.com</code> et colle-la ici. Ce jeton expire avec ta session locator : il faudra le refaire de temps en temps.</p>
+      <form method="post" action="/locator/token" class="locator-form">
+        <label>Jeton / sessionid <input name="token" required autocomplete="off" spellcheck="false" placeholder="valeur du cookie sessionid ou clé API"></label>
+        <button class="btn btn-ghost">Vérifier et lier</button>
+      </form>
+    </details>
+
+    <p class="muted"><em>Pourquoi pas un bouton « Sign in with Google » ici ?</em> Le bouton Google du locator est une connexion OAuth entre Google et UVS, réservée à leur site : notre outil ne peut pas la déclencher à ta place ni en récupérer le résultat. Les deux méthodes ci-dessus aboutissent au même jeton d'accès.</p>
+  <% } %>
+</div>
+
+<%- include('partials/foot') %>

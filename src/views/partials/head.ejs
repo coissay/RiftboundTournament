@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= typeof title !== 'undefined' ? title + ' — ' : '' %>Riftbound Tournois</title>
+  <link rel="stylesheet" href="/style.css">
+<% if (typeof stylesheets !== 'undefined') { for (const href of stylesheets) { %>  <link rel="stylesheet" href="<%= href %>">
+<% } } %>  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏆</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <a href="/" class="logo">⚔️ <span>Riftbound</span> Tournois</a>
+  <nav>
+    <a href="/">Tournois</a>
+    <a href="/stats">Stats</a>
+    <% if (currentUser) { %>
+      <a href="/decks">Mes decks</a>
+      <a href="/deckbuilder">Deckbuilder</a>
+      <span class="me">👤 <%= currentUser.username %></span>
+      <form action="/logout" method="post" class="inline"><button class="btn btn-ghost">Déconnexion</button></form>
+    <% } else { %>
+      <a href="/login">Connexion</a>
+      <a href="/register" class="btn btn-gold">Créer un compte</a>
+    <% } %>
+  </nav>
+</header>
+<main>
+<% if (flash) { %>
+  <div class="flash flash-<%= flash.type %>"><%= flash.text %></div>
+<% } %>

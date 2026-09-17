@@ -1,0 +1,152 @@
+<%- include('partials/head', { title: 'Deckbuilder', stylesheets: ['/deckbuilder.css'] }) %>
+
+<div class="db-layout">
+  <!-- Galerie de cartes filtrable -->
+  <section class="card db-gallery">
+    <!-- Onglets façon Piltover Archive : construction du deck en plusieurs temps -->
+    <div class="db-toolbar">
+      <div class="db-tabs" role="tablist" id="db-tabs">
+        <button type="button" class="db-tab active" data-tab="legend" role="tab"><img src="<%= (meta.types.find(t => t.id === 'legend') || {}).icon || '' %>" alt="">Légende</button>
+        <button type="button" class="db-tab" data-tab="main" role="tab"><img src="<%= (meta.types.find(t => t.id === 'unit') || {}).icon || '' %>" alt="">Deck principal</button>
+        <button type="button" class="db-tab" data-tab="battlefields" role="tab"><img src="<%= (meta.types.find(t => t.id === 'battlefield') || {}).icon || '' %>" alt="">Champs de bataille</button>
+        <button type="button" class="db-tab" data-tab="runes" role="tab"><img src="<%= (meta.types.find(t => t.id === 'rune') || {}).icon || '' %>" alt="">Runes</button>
+        <button type="button" class="db-tab" data-tab="all" role="tab">Tout</button>
+      </div>
+      <div class="db-target" title="Où envoyer la carte au clic">
+        <span class="muted">Ajouter à :</span>
+        <button type="button" class="db-target-btn active" data-target="deck" title="Deck (section selon le type de carte)">🃏 Deck</button>
+        <button type="button" class="db-target-btn" data-target="sideboard" title="Réserve (sideboard)">📦 Réserve</button>
+        <button type="button" class="db-target-btn" data-target="champion" title="Définir comme champion (unités)">★ Champion</button>
+      </div>
+    </div>
+
+    <div class="db-searchbar">
+      <input type="search" id="db-search" placeholder="Rechercher une carte (nom, tag, code)… — touche /" autocomplete="off" spellcheck="false">
+      <select id="db-sort" title="Tri">
+        <option value="name">Nom</option>
+        <option value="energy">Coût</option>
+        <option value="set">Extension + n°</option>
+      </select>
+      <button type="button" class="btn btn-ghost" id="db-filters-toggle" aria-expanded="false" aria-controls="db-drawer">⚙ Filtres <span class="db-filter-badge" id="db-filter-badge" hidden></span></button>
+    </div>
+
+    <!-- Tiroir de filtres -->
+    <div class="db-drawer" id="db-drawer" hidden>
+      <div class="db-drawer-block">
+        <h4>Domaines</h4>
+        <div class="db-domain-icons">
+          <% for (const d of meta.domains) { if (d.id === 'colorless') continue; %>
+            <button type="button" class="db-domain-btn domain-<%= d.id %>" data-domain="<%= d.id %>" title="<%= d.label %>" style="--dom-color: <%= d.color || '#fff' %>">
+              <% if (d.icon) { %><img src="<%= d.icon %>" alt="<%= d.label %>"><% } else { %><%= d.label %><% } %>
+            </button>
+          <% } %>
+          <button type="button" class="db-domain-btn domain-colorless" data-domain="colorless" title="Neutre (sans domaine)" style="--dom-color: #9aa6bd">∅</button>
+          <button type="button" class="btn btn-ghost btn-small" id="db-legend-domains" hidden title="Ne garder que les domaines de la légende du deck">Domaines de la légende</button>
+        </div>
+      </div>
+      <div class="db-drawer-block db-drawer-selects">
+        <label>Extension
+          <select id="db-set"><option value="">Toutes</option><% for (const st of meta.sets) { %><option value="<%= st.id %>"><%= st.label %> (<%= st.id %>)</option><% } %></select>
+        </label>
+        <label>Type
+          <select id="db-type">
+            <option value="">Tous</option>
+            <option value="unit">Unités</option>
+            <option value="spell">Sorts</option>
+            <option value="gear">Équipements</option>
+            <option value="legend">Légendes</option>
+            <option value="battlefield">Champs de bataille</option>
+            <option value="rune">Runes</option>
+          </select>
+        </label>
+        <label>Rareté
+          <select id="db-rarity"><option value="">Toutes</option><% for (const r of meta.rarities) { %><option value="<%= r.id %>"><%= r.label %></option><% } %></select>
+        </label>
+      </div>
+      <div class="db-drawer-block">
+        <label class="check db-variants-toggle"><input type="checkbox" id="db-variants"> Afficher les versions alternatives <span class="muted">(art alternatif, showcase, promo)</span></label>
+      </div>
+      <div class="db-drawer-block db-ranges">
+        <div class="db-range" data-range="energy">
+          <div class="db-range-head"><h4>Énergie</h4><span class="muted" data-range-label>Tout</span></div>
+          <div class="db-range-inputs"><input type="range" min="0" max="12" value="0" data-min><input type="range" min="0" max="12" value="12" data-max></div>
+        </div>
+        <div class="db-range" data-range="power">
+          <div class="db-range-head"><h4>Puissance</h4><span class="muted" data-range-label>Tout</span></div>
+          <div class="db-range-inputs"><input type="range" min="0" max="4" value="0" data-min><input type="range" min="0" max="4" value="4" data-max></div>
+        </div>
+        <div class="db-range" data-range="might">
+          <div class="db-range-head"><h4>Force</h4><span class="muted" data-range-label>Tout</span></div>
+          <div class="db-range-inputs"><input type="range" min="0" max="10" value="0" data-min><input type="range" min="0" max="10" value="10" data-max></div>
+        </div>
+      </div>
+      <div class="db-drawer-foot">
+        <span class="muted">Actifs : <span id="db-active-filters">aucun</span></span>
+        <span class="db-spacer"></span>
+        <button type="button" class="btn btn-ghost btn-small" id="db-reset-filters">Réinitialiser</button>
+      </div>
+    </div>
+
+    <div class="db-gallery-status">
+      <span class="muted db-help">Clic gauche : ajouter · clic droit : retirer · <b>★</b> champion · <b>R</b> réserve. Survole une carte pour la zoomer.</span>
+      <span class="muted" id="db-result-count">Chargement du catalogue…</span>
+    </div>
+    <div class="db-grid" id="db-grid"></div>
+    <div class="db-more">
+      <button type="button" class="btn btn-ghost" id="db-more" hidden>Afficher plus</button>
+    </div>
+  </section>
+
+  <!-- Deck en construction -->
+  <aside class="card db-deck" id="db-deck">
+    <div class="db-deck-head">
+      <input type="text" id="db-name" placeholder="Nom du deck" maxlength="80" autocomplete="off">
+      <p class="muted db-deck-source" id="db-deck-source" hidden></p>
+    </div>
+
+    <ul class="db-rules" id="db-rules" aria-live="polite"></ul>
+
+    <div id="db-sections"></div>
+
+    <div class="db-actions">
+      <button type="button" class="btn btn-gold" id="db-save">Enregistrer comme deck</button>
+      <button type="button" class="btn" id="db-update" hidden>Mettre à jour le deck</button>
+      <button type="button" class="btn btn-ghost" id="db-import">Importer une decklist</button>
+      <button type="button" class="btn btn-ghost" id="db-clear">Vider</button>
+    </div>
+
+    <details class="db-export" open>
+      <summary>Export texte <button type="button" class="btn btn-ghost btn-small" id="db-copy">Copier</button></summary>
+      <textarea id="db-export-text" rows="14" readonly spellcheck="false"></textarea>
+    </details>
+  </aside>
+</div>
+
+<!-- Import d'une decklist collée -->
+<dialog id="db-import-dialog" class="db-dialog">
+  <form method="dialog">
+    <h2>Importer une decklist</h2>
+    <p class="muted">Colle un export Riftbound (sections <code>Legend:</code>, <code>Champion:</code>, <code>MainDeck:</code>, <code>Battlefields:</code>, <code>Runes:</code>, <code>Sideboard:</code>). Le deck en cours sera remplacé.</p>
+    <textarea id="db-import-text" rows="16" spellcheck="false" placeholder="Legend:&#10;1 Akali, Rogue Assassin&#10;&#10;MainDeck:&#10;3 Noxus Hopeful&#10;…"></textarea>
+    <p class="warn" id="db-import-error" hidden></p>
+    <div class="row-actions">
+      <button type="button" class="btn btn-gold" id="db-import-go">Charger</button>
+      <button type="submit" class="btn btn-ghost">Annuler</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Mise à jour d'un deck existant : formulaire caché posté sur /decks/:id/edit -->
+<form method="post" id="db-update-form" hidden>
+  <input type="hidden" name="name">
+  <input type="hidden" name="notes">
+  <textarea name="cards" hidden></textarea>
+  <div id="db-update-domains"></div>
+</form>
+
+<script>
+  // Deck existant à charger (via ?deck=<id>), ou null. `<` échappé pour ne pas fermer le script.
+  window.DECKBUILDER_INIT = <%- JSON.stringify(init).replace(/</g, '\\u003c') %>;
+</script>
+<script src="/deckbuilder.js"></script>
+<%- include('partials/foot') %>

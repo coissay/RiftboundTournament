@@ -1,0 +1,55 @@
+<%
+/* Attend : resolved (résultat de resolveDecklist), thumb (fonction), compact (bool, optionnel) */
+const isCompact = typeof compact !== 'undefined' && compact;
+%>
+<% if (resolved.empty) { %>
+  <div class="deck-view-empty muted">Colle ta decklist pour voir le deck apparaître ici.</div>
+<% } else { %>
+  <div class="deck-view<%= isCompact ? ' deck-view-compact' : '' %>">
+    <div class="deck-view-head">
+      <% if (resolved.legendCard || resolved.championCard) { %>
+        <div class="deck-hero">
+          <% if (resolved.legendCard && resolved.legendCard.image) { %>
+            <a href="<%= resolved.legendCard.image %>" target="_blank" rel="noopener" class="deck-hero-card" title="<%= resolved.legend %>">
+              <img src="<%= thumb(resolved.legendCard.image, 400) %>" alt="<%= resolved.legend %>" loading="lazy">
+            </a>
+          <% } %>
+          <% if (resolved.championCard && resolved.championCard.image) { %>
+            <a href="<%= resolved.championCard.image %>" target="_blank" rel="noopener" class="deck-hero-card" title="<%= resolved.champion %>">
+              <img src="<%= thumb(resolved.championCard.image, 400) %>" alt="<%= resolved.champion %>" loading="lazy">
+            </a>
+          <% } %>
+        </div>
+      <% } %>
+      <div class="deck-view-meta">
+        <% if (resolved.legend) { %><div><span class="muted">Légende :</span> <strong><%= resolved.legend %></strong></div><% } %>
+        <% if (resolved.champion) { %><div><span class="muted">Champion :</span> <strong><%= resolved.champion %></strong></div><% } %>
+        <% if (resolved.domains.length) { %>
+          <div><% for (const dom of resolved.domains) { %><span class="domain domain-<%= dom.toLowerCase() %>"><%= dom %></span><% } %></div>
+        <% } %>
+        <div class="muted"><%= resolved.total %> carte(s) hors réserve<% if (resolved.unknown) { %> · <span class="warn">⚠ <%= resolved.unknown %> non reconnue(s)</span><% } %></div>
+      </div>
+    </div>
+
+    <% for (const s of resolved.sections) { if (s.key === 'legend' || s.key === 'champion') continue; %>
+      <section class="deck-section deck-section-<%= s.key %>">
+        <h3><%= s.label %> <span class="muted">(<%= s.count %>)</span></h3>
+        <div class="card-grid<%= s.key === 'battlefields' ? ' card-grid-landscape' : '' %>">
+          <% for (const line of s.cards) { %>
+            <% if (line.card && line.card.image) { %>
+              <a href="<%= line.card.image %>" target="_blank" rel="noopener" class="card-thumb" data-full="<%= line.card.image %>" title="<%= line.card.name %> · <%= line.card.publicCode %>">
+                <img src="<%= thumb(line.card.image, s.key === 'battlefields' ? 400 : 250) %>" alt="<%= line.card.name %>" loading="lazy">
+                <span class="qty">×<%= line.qty %></span>
+              </a>
+            <% } else { %>
+              <div class="card-thumb card-unknown" title="Carte non reconnue dans le catalogue">
+                <span class="card-unknown-name">⚠ <%= line.name %></span>
+                <span class="qty">×<%= line.qty %></span>
+              </div>
+            <% } %>
+          <% } %>
+        </div>
+      </section>
+    <% } %>
+  </div>
+<% } %>

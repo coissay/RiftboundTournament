@@ -1,0 +1,5 @@
+node_modules
+.claude
+README.md
+docker-compose.yml
+Dockerfile

@@ -1,0 +1,33 @@
+services:
+  app:
+    build: .
+    container_name: riftbound-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      # SESSION_SECRET: change-moi-en-prod
+      # ADMIN_USERS: alice,bob        # pseudos ayant la main sur tous les tournois (rouvrir, clôturer…)
+      # AUTO_CLOSE_DAYS: 7            # clôture automatique des tournois en attente depuis N jours
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:7
+    container_name: riftbound-mongo
+    restart: unless-stopped
+    # Port publié pour le debug (mongosh) et le dev hors Docker (npm run dev).
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  mongo-data:

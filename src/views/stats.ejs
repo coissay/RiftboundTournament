@@ -1,0 +1,59 @@
+<%- include('partials/head', { title: 'Statistiques' }) %>
+
+<div class="page-head"><h1>Statistiques</h1></div>
+<p class="muted">Tous tournois confondus. Les byes sont exclus, un match nul compte pour une demi-victoire dans le win rate.</p>
+
+<div class="stats-grid">
+  <div class="card">
+    <h2>🏆 Joueurs</h2>
+    <% if (players.length === 0) { %><div class="empty">Aucun match joué pour l'instant.</div><% } else { %>
+    <table class="table">
+      <thead><tr><th>Joueur</th><th>Coupes</th><th>Matchs</th><th>V-N-D</th><th>Manches</th><th>Win rate</th><th>GW%</th></tr></thead>
+      <tbody>
+      <% for (const p of players) { %>
+        <tr>
+          <td><a href="/players/<%= p.userId %>"><strong><%= p.username %></strong></a></td>
+          <td><%= p.cups ? '🏆'.repeat(Math.min(p.cups, 5)) + (p.cups > 5 ? ' ×' + p.cups : '') : '—' %></td>
+          <td><%= p.matches %></td>
+          <td><%= p.wins %>-<%= p.draws %>-<%= p.losses %></td>
+          <td><%= p.gameWins %>-<%= p.gameDraws %>-<%= p.gameLosses %></td>
+          <td>
+            <div class="rate-bar"><div class="rate-fill" style="width: <%= (p.winRate * 100).toFixed(0) %>%"></div></div>
+            <%= (p.winRate * 100).toFixed(1) %>%
+          </td>
+          <td><%= (p.gameWinRate * 100).toFixed(1) %>%</td>
+        </tr>
+      <% } %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+
+  <div class="card">
+    <h2>🃏 Decks</h2>
+    <% if (decks.length === 0) { %><div class="empty">Aucun match joué pour l'instant.</div><% } else { %>
+    <table class="table">
+      <thead><tr><th>Deck</th><th>Joueur</th><th>Coupes</th><th>Matchs</th><th>V-N-D</th><th>Manches</th><th>Win rate</th><th>GW%</th></tr></thead>
+      <tbody>
+      <% for (const d of decks) { %>
+        <tr>
+          <td><strong><%= d.deckName %></strong></td>
+          <td class="muted"><a href="/players/<%= d.ownerId %>"><%= d.ownerName %></a></td>
+          <td><%= d.cups ? '🏆'.repeat(Math.min(d.cups, 5)) + (d.cups > 5 ? ' ×' + d.cups : '') : '—' %></td>
+          <td><%= d.matches %></td>
+          <td><%= d.wins %>-<%= d.draws %>-<%= d.losses %></td>
+          <td><%= d.gameWins %>-<%= d.gameDraws %>-<%= d.gameLosses %></td>
+          <td>
+            <div class="rate-bar"><div class="rate-fill" style="width: <%= (d.winRate * 100).toFixed(0) %>%"></div></div>
+            <%= (d.winRate * 100).toFixed(1) %>%
+          </td>
+          <td><%= (d.gameWinRate * 100).toFixed(1) %>%</td>
+        </tr>
+      <% } %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+</div>
+
+<%- include('partials/foot') %>

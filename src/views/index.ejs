@@ -1,0 +1,41 @@
+<%- include('partials/head', { title: 'Tournois' }) %>
+
+<div class="page-head">
+  <h1>Tournois</h1>
+  <% if (currentUser) { %>
+    <a href="/tournaments/new" class="btn btn-gold">+ Nouveau tournoi</a>
+  <% } %>
+</div>
+
+<% if (tournaments.length === 0) { %>
+  <div class="empty">Aucun tournoi pour le moment. <% if (currentUser) { %>Lance le premier !<% } else { %>Crée un compte pour en organiser un.<% } %></div>
+<% } %>
+
+<div class="event-list">
+<% for (const t of tournaments) { %>
+  <a href="/tournaments/<%= t._id %>" class="event-card">
+    <div class="event-date">
+      <span class="day"><%= t.date.toLocaleDateString('fr-FR', { day: '2-digit' }) %></span>
+      <span class="month"><%= t.date.toLocaleDateString('fr-FR', { month: 'short' }) %></span>
+    </div>
+    <div class="event-info">
+      <h2><%= t.name %></h2>
+      <p class="muted">
+        <%= t.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) %>
+        · <%= Math.floor(t.durationMinutes / 60) %>h<%= t.durationMinutes % 60 ? String(t.durationMinutes % 60).padStart(2, '0') : '' %>
+        · rondes de <%= t.roundLength %> min
+        · organisé par <%= t.organizerName %>
+      </p>
+      <% if (t.winner) { %><p class="winner-line">🏆 <%= t.winner.username %> — <%= t.winner.deckName %></p><% } %>
+    </div>
+    <div class="event-side">
+      <span class="badge badge-<%= t.status === 'inscriptions' ? 'open' : t.status === 'en_cours' ? 'live' : 'done' %>">
+        <%= t.status === 'inscriptions' ? 'Inscriptions ouvertes' : t.status === 'en_cours' ? '● En cours' : t.autoClosed ? 'Clôturé auto' : 'Terminé' %>
+      </span>
+      <span class="muted"><%= (t.players || []).length %> joueur<%= (t.players || []).length > 1 ? 's' : '' %></span>
+    </div>
+  </a>
+<% } %>
+</div>
+
+<%- include('partials/foot') %>

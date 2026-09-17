@@ -1,0 +1,41 @@
+<%- include('partials/head', { title: deck ? 'Modifier le deck' : 'Nouveau deck' }) %>
+<%
+/* Valeurs initiales du formulaire : le deck édité, sinon un éventuel préremplissage (venant du deckbuilder). */
+const initial = deck || (typeof prefill !== 'undefined' && prefill) || { name: '', cards: '', notes: '' };
+%>
+
+<div class="deck-editor">
+  <div class="card deck-editor-form">
+    <h1><%= deck ? 'Modifier « ' + deck.name + ' »' : 'Nouveau deck' %></h1>
+    <form method="post" id="deck-form">
+      <label>Nom du deck <input name="name" required value="<%= initial.name %>" placeholder="ex : Akali Fury/Calm"></label>
+      <label>Decklist
+        <textarea name="cards" id="decklist" rows="22" spellcheck="false" placeholder="Colle ici l'export de ton deck :&#10;&#10;Legend:&#10;1 Akali, Rogue Assassin&#10;&#10;Champion:&#10;1 Akali, Deadly Weapon&#10;&#10;MainDeck:&#10;3 Noxus Hopeful&#10;3 Defy&#10;...&#10;&#10;Battlefields:&#10;1 Back-Alley Bar&#10;...&#10;&#10;Runes:&#10;6 Fury Rune&#10;6 Calm Rune&#10;&#10;Sideboard:&#10;2 Brynhir Thundersong"><%= initial.cards %></textarea>
+      </label>
+      <p class="muted form-hint">Légende, champion, domaines et champs de bataille sont détectés automatiquement à partir de la liste (cartes reconnues via la galerie officielle <a href="https://playriftbound.com/fr-fr/card-gallery/" target="_blank" rel="noopener">playriftbound.com</a>).</p>
+      <details class="advanced" <%= deck && deck.domainsManual ? 'open' : '' %>>
+        <summary class="muted">Forcer les domaines (sinon déduits de la légende / des runes)</summary>
+        <div class="domain-checks">
+        <% for (const dom of domains) { %>
+          <label class="check">
+            <input type="checkbox" name="domains" value="<%= dom %>" <%= deck && deck.domainsManual && deck.domains && deck.domains.includes(dom) ? 'checked' : '' %>>
+            <span class="domain domain-<%= dom.toLowerCase() %>"><%= dom %></span>
+          </label>
+        <% } %>
+        </div>
+      </details>
+      <label>Notes <textarea name="notes" rows="3" placeholder="Plan de jeu, matchups..."><%= initial.notes || '' %></textarea></label>
+      <div class="row-actions">
+        <button class="btn btn-gold"><%= deck ? 'Enregistrer' : 'Créer le deck' %></button>
+        <a href="/decks" class="btn btn-ghost">Annuler</a>
+      </div>
+    </form>
+  </div>
+
+  <aside class="card deck-editor-preview" id="deck-preview" aria-live="polite">
+    <%- include('partials/deck-view', { resolved, thumb }) %>
+  </aside>
+</div>
+
+<script src="/deck-preview.js"></script>
+<%- include('partials/foot') %>

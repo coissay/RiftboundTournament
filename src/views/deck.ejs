@@ -1,0 +1,28 @@
+<%- include('partials/head', { title: deck.name }) %>
+
+<div class="page-head">
+  <div>
+    <h1><%= deck.name %></h1>
+    <p class="muted">par <a href="/players/<%= deck.ownerId %>"><%= deck.ownerName %></a></p>
+  </div>
+  <div class="row-actions">
+    <% if (isOwner) { %><a href="/deckbuilder?deck=<%= deck._id %>" class="btn btn-ghost">Ouvrir dans le deckbuilder</a><a href="/decks/<%= deck._id %>/edit" class="btn btn-ghost">Modifier</a><% } %>
+    <a href="/decks" class="btn btn-ghost">← Mes decks</a>
+  </div>
+</div>
+
+<div class="deck-detail">
+  <div class="card deck-detail-view">
+    <%- include('partials/deck-view', { resolved, thumb }) %>
+  </div>
+  <aside class="deck-detail-side">
+    <% if (deck.notes) { %><div class="card"><h2>Notes</h2><p class="deck-notes"><%= deck.notes %></p></div><% } %>
+    <div class="card">
+      <h2>Decklist</h2>
+      <pre class="decklist" id="raw-decklist"><%= deck.cards %></pre>
+      <button class="btn btn-ghost btn-small" type="button" onclick="navigator.clipboard.writeText(document.getElementById('raw-decklist').textContent).then(()=>{this.textContent='Copié !'})">Copier</button>
+    </div>
+  </aside>
+</div>
+
+<%- include('partials/foot') %>

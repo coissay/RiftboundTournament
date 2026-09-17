@@ -1,0 +1,13 @@
+<%- include('partials/head', { title: 'Créer un compte' }) %>
+
+<div class="card card-narrow">
+  <h1>Créer un compte</h1>
+  <form method="post" action="/register">
+    <label>Pseudo <input name="username" required minlength="2" autofocus></label>
+    <label>Mot de passe <input type="password" name="password" required minlength="4"></label>
+    <button class="btn btn-gold btn-block">Créer mon compte</button>
+  </form>
+  <p class="muted">Déjà un compte ? <a href="/login">Connexion</a></p>
+</div>
+
+<%- include('partials/foot') %>

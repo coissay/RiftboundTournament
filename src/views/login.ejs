@@ -1,0 +1,13 @@
+<%- include('partials/head', { title: 'Connexion' }) %>
+
+<div class="card card-narrow">
+  <h1>Connexion</h1>
+  <form method="post" action="/login">
+    <label>Pseudo <input name="username" required autofocus></label>
+    <label>Mot de passe <input type="password" name="password" required></label>
+    <button class="btn btn-gold btn-block">Se connecter</button>
+  </form>
+  <p class="muted">Pas encore de compte ? <a href="/register">Créer un compte</a></p>
+</div>
+
+<%- include('partials/foot') %>
