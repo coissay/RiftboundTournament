@@ -87,12 +87,12 @@
   <% if (currentUser && (canReport || owner || match.status === 'terminé')) { %>
     <div class="row-actions fp-actions">
       <% if (canReport && games.played > 0 && !decided) { %>
-        <form method="post" action="/free-play/<%= match._id %>/finish" class="inline" onsubmit="return confirm('Clôturer le match au score en l\'état ?')">
+        <form method="post" action="/free-play/<%= match._id %>/finish" class="inline" data-confirm="Clôturer le match au score en l'état ?">
           <button class="btn btn-ghost btn-small">🏁 Clôturer au score</button>
         </form>
       <% } %>
       <% if (canReport && games.played > 0) { %>
-        <form method="post" action="/free-play/<%= match._id %>/reset" class="inline" onsubmit="return confirm('Effacer toutes les manches saisies pour ce match ?')">
+        <form method="post" action="/free-play/<%= match._id %>/reset" class="inline" data-confirm="Effacer toutes les manches saisies pour ce match ?">
           <button class="btn btn-ghost btn-small">↺ Réinitialiser la saisie</button>
         </form>
       <% } %>
@@ -102,7 +102,7 @@
         </form>
       <% } %>
       <% if (owner) { %>
-        <form method="post" action="/free-play/<%= match._id %>/delete" class="inline" onsubmit="return confirm('Supprimer définitivement ce match ?')">
+        <form method="post" action="/free-play/<%= match._id %>/delete" class="inline" data-confirm="Le match et ses manches seront supprimés définitivement." data-confirm-title="Supprimer ce match ?">
           <button class="btn btn-danger btn-small">Supprimer</button>
         </form>
       <% } %>

@@ -767,8 +767,11 @@
     }
   }
 
-  function clearDeck() {
-    if (!confirm('Vider le deck en cours ? (le deck enregistré n\'est pas modifié)')) return;
+  async function clearDeck() {
+    const ok = window.appConfirm
+      ? await window.appConfirm('Le deck en cours d’édition sera vidé. Le deck enregistré n’est pas modifié.', { title: 'Vider le deck ?', ok: 'Vider', danger: true })
+      : confirm('Vider le deck en cours ? (le deck enregistré n\'est pas modifié)');
+    if (!ok) return;
     deck = Core.emptyDeck();
     if (location.search) history.replaceState(null, '', '/deckbuilder');
     renderDeck();

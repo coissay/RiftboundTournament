@@ -36,7 +36,7 @@
       <a href="/decks/<%= d._id %>" class="btn btn-ghost">Voir</a>
       <a href="/decks/<%= d._id %>/edit" class="btn btn-ghost">Modifier</a>
       <a href="/deckbuilder?deck=<%= d._id %>" class="btn btn-ghost">Ouvrir dans le deckbuilder</a>
-      <form method="post" action="/decks/<%= d._id %>/delete" class="inline" onsubmit="return confirm('Supprimer ce deck ?')">
+      <form method="post" action="/decks/<%= d._id %>/delete" class="inline" data-confirm="Le deck sera supprimé. Ses stats et résultats passés sont conservés." data-confirm-title="Supprimer ce deck ?">
         <button class="btn btn-danger">Supprimer</button>
       </form>
     </div>

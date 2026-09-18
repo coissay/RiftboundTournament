@@ -123,7 +123,7 @@
 
   <% if (canReport && played > 0) { %>
     <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/reset"
-          class="reset-form" onsubmit="return confirm('Effacer toutes les manches saisies pour ce match ?')">
+          class="reset-form" data-confirm="Effacer toutes les manches saisies pour ce match ?">
       <button class="btn btn-ghost btn-small">↺ Réinitialiser la saisie</button>
     </form>
   <% } %>

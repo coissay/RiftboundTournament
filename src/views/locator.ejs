@@ -13,7 +13,7 @@
     <div class="row-actions">
       <form method="post" action="/locator/import" class="inline"><button class="btn btn-gold">Importer mes résultats</button></form>
       <a href="/players/<%= currentUser.id %>" class="btn btn-ghost">Ma page joueur</a>
-      <form method="post" action="/locator/disconnect" class="inline" onsubmit="return confirm('Déconnecter le compte locator ? Les événements déjà importés sont conservés.')"><button class="btn btn-danger">Déconnecter</button></form>
+      <form method="post" action="/locator/disconnect" class="inline" data-confirm="Déconnecter le compte locator ? Les événements déjà importés sont conservés."><button class="btn btn-danger">Déconnecter</button></form>
     </div>
   <% } else { %>
 

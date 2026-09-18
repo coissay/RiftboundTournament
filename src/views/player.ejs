@@ -67,7 +67,7 @@
       <% if (locatorInfo) { %>
         <div class="row-actions">
           <form method="post" action="/locator/import" class="inline"><button class="btn btn-gold">Importer mes résultats</button></form>
-          <form method="post" action="/locator/disconnect" class="inline" onsubmit="return confirm('Déconnecter le compte locator ? Les événements déjà importés sont conservés.')"><button class="btn btn-ghost">Déconnecter</button></form>
+          <form method="post" action="/locator/disconnect" class="inline" data-confirm="Déconnecter le compte locator ? Les événements déjà importés sont conservés."><button class="btn btn-ghost">Déconnecter</button></form>
         </div>
       <% } %>
     <% } %>

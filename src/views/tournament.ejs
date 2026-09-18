@@ -117,14 +117,13 @@
       <form method="post" action="/tournaments/<%= tournament._id %>/rounds" class="inline">
         <button class="btn btn-gold" <%= pending ? 'disabled' : '' %>>▶ Ronde suivante</button>
       </form>
-      <form method="post" action="/tournaments/<%= tournament._id %>/finish" class="inline"
-            onsubmit="return confirm('Clôturer le tournoi et attribuer la coupe au 1er du classement ?')">
+      <form method="post" action="/tournaments/<%= tournament._id %>/finish" class="inline" data-confirm="Le tournoi sera marqué terminé et la coupe attribuée au 1er du classement. Tu pourras le rouvrir ensuite si besoin." data-confirm-title="Clôturer le tournoi ?" data-confirm-ok="🏁 Clôturer et remettre la coupe" data-confirm-icon="🏆">
         <button class="btn btn-danger" <%= pending ? 'disabled' : '' %>>🏁 Clôturer & remettre la coupe</button>
       </form>
       <% if (pending) { %><span class="muted">— saisis tous les résultats de la ronde en cours</span><% } %>
     <% } else if (tournament.status === 'terminé') { %>
       <form method="post" action="/tournaments/<%= tournament._id %>/reopen" class="inline"
-            onsubmit="return confirm('Rouvrir le tournoi ?<%= tournament.winner ? ' La coupe sera retirée jusqu\'à la prochaine clôture.' : '' %>')">
+            data-confirm="Rouvrir le tournoi ?<%= tournament.winner ? ' La coupe sera retirée jusqu’à la prochaine clôture.' : '' %>" data-confirm-title="Rouvrir le tournoi">
         <button class="btn btn-ghost">↺ Rouvrir le tournoi</button>
       </form>
       <span class="muted">— <%= tournament.rounds.length > 0 ? 'reprend à la ronde ' + tournament.rounds.length : 'rouvre les inscriptions' %></span>
@@ -262,8 +261,7 @@
               <% if (gi.link) { %><button type="button" class="btn btn-small btn-ghost" onclick="navigator.clipboard.writeText('<%= gi.link %>').then(()=>{this.textContent='Lien copié !'})">Copier le lien</button><% } %>
             <% } %>
             <% if (organizer && !p.dropped && tournament.status === 'en_cours') { %>
-              <form method="post" action="/tournaments/<%= tournament._id %>/players/<%= p.userId %>/drop" class="inline"
-                    onsubmit="return confirm('Retirer <%= p.username %> des prochaines rondes ?')">
+              <form method="post" action="/tournaments/<%= tournament._id %>/players/<%= p.userId %>/drop" class="inline" data-confirm="<%= p.username %> ne sera plus apparié·e dans les prochaines rondes. Ses résultats déjà joués sont conservés." data-confirm-title="Retirer <%= p.username %> du tournoi ?" data-confirm-ok="Drop">
                 <button class="btn btn-small btn-danger">Drop</button>
               </form>
             <% } %>

@@ -542,3 +542,24 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .siding-form-current summary::-webkit-details-marker { display: none; }
 .siding-form-body { margin-top: 0.6rem; }
 .sided-deck summary::marker, .siding-form summary::marker, .siding-form-current summary::marker, .siding-panel summary::marker, .guest-add summary::marker { content: ''; }
+
+/* ---- Boîte de confirmation (confirm.js) ---- */
+.confirm-dialog { border: 0; padding: 0; background: transparent; max-width: min(92vw, 460px); width: 100%; }
+.confirm-dialog::backdrop { background: rgba(4, 8, 18, 0.7); backdrop-filter: blur(3px); }
+.confirm-dialog[open] .confirm-box { animation: confirm-in 0.16s ease-out; }
+.confirm-dialog.is-closing .confirm-box { animation: confirm-out 0.12s ease-in forwards; }
+.confirm-box {
+  margin: 0; background: var(--bg-card); color: var(--text);
+  border: 1px solid var(--border); border-radius: 14px; padding: 1.4rem 1.5rem 1.2rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(212, 169, 65, 0.15);
+  text-align: center;
+}
+.confirm-icon { font-size: 2.2rem; line-height: 1; margin-bottom: 0.6rem; }
+.confirm-title { margin: 0 0 0.5rem; font-size: 1.2rem; }
+.confirm-message { margin: 0 0 1.2rem; color: var(--muted); line-height: 1.45; }
+.confirm-actions { display: flex; gap: 0.7rem; justify-content: center; flex-wrap: wrap; }
+.confirm-actions .btn { min-width: 120px; }
+.btn-danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+.btn-danger-solid:hover { filter: brightness(1.1); }
+@keyframes confirm-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes confirm-out { to { opacity: 0; transform: translateY(6px) scale(0.98); } }
