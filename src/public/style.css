@@ -509,3 +509,9 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .sided-badge-inline.sided-in { background: var(--live); }
 .sided-badge-inline.sided-out { background: var(--danger); }
 .siding-grid .sided-deck-view .card-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
+
+.siding-game { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.7rem; margin-bottom: 0.6rem; background: var(--bg); }
+.siding-game-head { margin-bottom: 0.4rem; }
+.siding-forms { margin-top: 1rem; }
+.siding-forms h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+.siding-forms .siding-form { margin-top: 0.5rem; }

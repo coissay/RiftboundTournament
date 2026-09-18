@@ -350,9 +350,25 @@ function canReportMatch(tournament, round, match, user) {
   return isOrganizer(tournament, user) || [String(match.p1.userId), String(match.p2.userId)].includes(user.id);
 }
 
-// ---- Side deck : cartes échangées avec la réserve pour ce match ----
-// Chaque joueur de la table peut noter ses échanges (pendant le tournoi ou après coup).
-// Ils restent cachés à tout le monde sauf lui tant que le tournoi n'est pas clôturé.
+// ---- Side deck : cartes échangées avec la réserve, manche par manche ----
+// En Bo3 / Bo5, la manche 1 se joue avec le deck inscrit (le deck est « remis à zéro »
+// à chaque nouvel adversaire, donc à chaque match) et le side se note à partir de la
+// manche 2. En Bo1, l'unique manche peut être sidée directement. Chaque manche a son
+// side, par rapport au deck inscrit (pendant le tournoi ou après coup). Cachés aux
+// autres jusqu'à la clôture.
+// Stockage : match.siding[userId].games[n] = { out, in, note, updatedAt }.
+function normalizeSiding(raw) {
+  if (!raw) return { games: {} };
+  if (raw.games) return raw;
+  if (Array.isArray(raw.out) || Array.isArray(raw.in)) return { games: { 2: raw } }; // ancien format (un side par match)
+  return { games: {} };
+}
+
+// Manches où le side deck est autorisé : [1] en Bo1, [2..bestOf] sinon.
+function sidingGamesFor(bestOf) {
+  return bestOf < 2 ? [1] : Array.from({ length: bestOf - 1 }, (_, i) => i + 2);
+}
+
 function sidingVisible(tournament, ownerId, viewer) {
   if (tournament.status === 'terminé') return true;
   return !!viewer && String(ownerId) === viewer.id;
@@ -398,13 +414,20 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
     const recordOf = Object.fromEntries(standings.map((s) => [s.userId, `${s.wins}-${s.draws}-${s.losses}`]));
     const viewer = req.session.user;
     const me = viewer ? [match.p1, match.p2].find((p) => String(p.userId) === viewer.id) || null : null;
-    const siding = match.siding || {};
+    const bestOf = tournament.bestOf || 1;
+    const siding = {};
+    for (const side of ['p1', 'p2']) siding[side] = normalizeSiding((match.siding || {})[String(match[side].userId)]);
     const visible = { p1: sidingVisible(tournament, match.p1.userId, viewer), p2: sidingVisible(tournament, match.p2.userId, viewer) };
-    const sidedDecks = {};
+    // Deck après side, par côté et par manche (seulement si visible pour ce visiteur).
+    const sidedDecks = { p1: {}, p2: {} };
     for (const side of ['p1', 'p2']) {
-      const sd = siding[String(match[side].userId)];
-      if (sd && visible[side] && (sd.out.length || sd.in.length)) sidedDecks[side] = await sidedDeckFor(req.db, match[side], sd);
+      if (!visible[side]) continue;
+      for (const [n, sd] of Object.entries(siding[side].games)) {
+        if (sd.out.length || sd.in.length) sidedDecks[side][n] = await sidedDeckFor(req.db, match[side], sd);
+      }
     }
+    const mySide = me ? (String(match.p1.userId) === String(me.userId) ? 'p1' : 'p2') : null;
+    const played = Array.isArray(match.gameResults) ? match.gameResults.length : 0;
     res.render('match', {
       tournament,
       round,
@@ -416,8 +439,12 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
       sidedDecks,
       thumb,
       me,
+      mySide,
       myDeckLines: me ? await deckLinesFor(req.db, me) : null,
-      mySiding: me ? siding[String(me.userId)] || null : null,
+      mySiding: mySide ? siding[mySide] : null,
+      sidingGames: sidingGamesFor(bestOf),
+      // Manche « en cours » : la prochaine à jouer, bornée aux manches sidables, pour ouvrir le bon formulaire.
+      currentGame: bestOf < 2 ? 1 : Math.min(Math.max(played + 1, 2), bestOf),
       cardImage: cardImageByName,
     });
   } catch (err) {
@@ -443,6 +470,12 @@ router.post('/tournaments/:id/rounds/:roundNumber/tables/:table/siding', require
     if (!match || match.bye) return flashAndRedirect(req, res, 'error', 'Match introuvable.', `/tournaments/${tournament._id}`);
     const me = [match.p1, match.p2].find((p) => String(p.userId) === req.session.user.id);
     if (!me) return flashAndRedirect(req, res, 'error', 'Seuls les joueurs de la table peuvent noter leur side deck.', url);
+    const bestOf = tournament.bestOf || 1;
+    const game = parseInt(req.body.game, 10);
+    if (!sidingGamesFor(bestOf).includes(game)) {
+      const allowed = bestOf < 2 ? 'la manche 1 (Bo1)' : `les manches 2 à ${bestOf} — la manche 1 se joue avec le deck inscrit`;
+      return flashAndRedirect(req, res, 'error', `Manche invalide : le side deck se note pour ${allowed}.`, url);
+    }
 
     let out = [];
     let inn = [];
@@ -460,17 +493,19 @@ router.post('/tournaments/:id/rounds/:roundNumber/tables/:table/siding', require
       inn = pick('in', lines?.sideboard);
     }
     const note = String(req.body.note || '').trim().slice(0, 300);
-    const key = `${path}.siding.${req.session.user.id}`;
-    if (out.length === 0 && inn.length === 0 && !note) {
-      await req.db.collection('tournaments').updateOne({ _id: tournament._id }, { $unset: { [key]: '' } });
-      return flashAndRedirect(req, res, 'success', 'Side deck effacé pour ce match.', url);
-    }
+    const uid = req.session.user.id;
+    const current = normalizeSiding((match.siding || {})[uid]);
+    const games = { ...current.games };
+    if (out.length === 0 && inn.length === 0 && !note) delete games[game];
+    else games[game] = { out, in: inn, note, updatedAt: new Date() };
+    const key = `${path}.siding.${uid}`;
     await req.db.collection('tournaments').updateOne(
       { _id: tournament._id },
-      { $set: { [key]: { out, in: inn, note, updatedAt: new Date() } } }
+      Object.keys(games).length ? { $set: { [key]: { games } } } : { $unset: { [key]: '' } }
     );
+    if (!games[game]) return flashAndRedirect(req, res, 'success', `Side deck de la manche ${game} effacé.`, url);
     const hidden = tournament.status !== 'terminé' ? ' Il restera caché aux autres jusqu’à la clôture du tournoi.' : '';
-    flashAndRedirect(req, res, 'success', 'Side deck enregistré.' + hidden, url);
+    flashAndRedirect(req, res, 'success', `Side deck de la manche ${game} enregistré.` + hidden, url);
   } catch (err) {
     next(err);
   }
