@@ -155,7 +155,14 @@ const initial = (s) => (s || '?').charAt(0);
         <button class="btn btn-ghost">↺ Rouvrir</button>
       </form>
       <span class="action-status"><%= tournament.rounds.length > 0 ? 'reprend à la ronde ' + tournament.rounds.length : 'rouvre les inscriptions' %></span>
+      <span class="spacer"></span>
     <% } %>
+    <% const nRounds = tournament.rounds.length, nPlayers = tournament.players.length; %>
+    <form method="post" action="/tournaments/<%= tournament._id %>/delete" class="inline"
+          data-confirm="« <%= tournament.name %> » sera supprimé définitivement : <%= nPlayers %> inscrit<%= nPlayers > 1 ? 's' : '' %>, <%= nRounds %> ronde<%= nRounds > 1 ? 's' : '' %>, résultats, side decks<%= tournament.winner ? ' et coupe' : '' %>. Les stats des joueurs et des decks ne le compteront plus. Cette action est irréversible."
+          data-confirm-title="Supprimer le tournoi ?" data-confirm-ok="Supprimer définitivement" data-confirm-danger>
+      <button class="btn btn-danger-text" title="Supprimer définitivement le tournoi">🗑 Supprimer le tournoi</button>
+    </form>
   </div>
 <% } %>
 

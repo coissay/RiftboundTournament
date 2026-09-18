@@ -52,7 +52,7 @@ a:hover { text-decoration: underline; }
 .me { color: var(--muted); }
 
 main { flex: 1; width: 100%; max-width: 1000px; margin: 0 auto; padding: 1.5rem; }
-.footer { text-align: center; color: var(--muted); padding: 1.5rem; font-size: 0.85rem; }
+main { padding-bottom: 2rem; }
 
 h1 { margin: 0 0 0.5rem; font-size: var(--fs-2xl); }
 h2 { margin: 0 0 0.7rem; font-size: var(--fs-lg); }
@@ -637,7 +637,6 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
   .tabbar a span { font-size: 1.25rem; line-height: 1.2; }
   .tabbar a.nav-active { color: var(--gold); background: var(--gold-soft); }
   main { padding-bottom: 5.5rem; }
-  .footer { padding-bottom: 5rem; }
 }
 
 /* ---- 2. Accueil : « prochaine étape » mise en avant ---- */
@@ -920,7 +919,7 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 /* ---- Mode table (page match en plein écran, téléphone posé entre les joueurs) ---- */
 .table-mode-toggle { margin: -0.3rem 0 0.8rem; }
 .table-mode-exit { display: none; }
-body.table-mode .topbar, body.table-mode .tabbar, body.table-mode .footer, body.table-mode .flash, body.table-mode .todo-banner,
+body.table-mode .topbar, body.table-mode .tabbar, body.table-mode .flash, body.table-mode .todo-banner,
 body.table-mode .match-topline p, body.table-mode .manche-history, body.table-mode .siding-current, body.table-mode .reset-form,
 body.table-mode #side-deck, body.table-mode .match-meta, body.table-mode .report-hint, body.table-mode .manche-report > .muted,
 body.table-mode .table-mode-toggle, body.table-mode .siding-form-after, body.table-mode .card-popover { display: none !important; }

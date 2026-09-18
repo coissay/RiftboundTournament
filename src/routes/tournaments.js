@@ -670,6 +670,23 @@ router.post('/tournaments/:id/finish', requireAuth, async (req, res, next) => {
   }
 });
 
+// ---- Suppression complète d'un tournoi : organisateur ou admin ----
+// Tout disparaît (inscriptions, rondes, résultats, side decks, coupe) ; les stats des
+// joueurs et des decks sont recalculées à la volée, elles ne le compteront plus.
+router.post('/tournaments/:id/delete', requireAuth, async (req, res, next) => {
+  try {
+    const tournament = await loadTournament(req, res);
+    if (!tournament) return;
+    if (!isOrganizer(tournament, req.session.user)) {
+      return flashAndRedirect(req, res, 'error', 'Seul l’organisateur (ou un admin) peut supprimer le tournoi.', `/tournaments/${tournament._id}`);
+    }
+    await req.db.collection('tournaments').deleteOne({ _id: tournament._id });
+    flashAndRedirect(req, res, 'success', `Tournoi « ${tournament.name} » supprimé.`, '/');
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---- Réouverture d'un tournoi clôturé (auto ou à la main) : organisateur ou admin ----
 // Reprend là où il en était : en cours s'il y a des rondes, sinon en inscriptions.
 // La coupe éventuelle est retirée jusqu'à la prochaine clôture.
