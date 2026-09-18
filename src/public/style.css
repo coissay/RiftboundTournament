@@ -921,7 +921,7 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .table-mode-exit { display: none; }
 body.table-mode .topbar, body.table-mode .tabbar, body.table-mode .flash, body.table-mode .todo-banner,
 body.table-mode .match-topline p, body.table-mode .manche-history, body.table-mode .siding-current, body.table-mode .reset-form,
-body.table-mode #side-deck, body.table-mode .match-meta, body.table-mode .report-hint, body.table-mode .manche-report > .muted,
+body.table-mode #side-deck, body.table-mode .report-hint, body.table-mode .manche-report > .muted,
 body.table-mode .table-mode-toggle, body.table-mode .siding-form-after, body.table-mode .card-popover { display: none !important; }
 body.table-mode main { max-width: none; padding: 4.2rem 1rem 1rem; min-height: 100vh; }
 body.table-mode .match-card { max-width: 1100px; }
@@ -948,3 +948,27 @@ body.table-mode .btn-report .who { font-size: 1.6rem; }
   body.table-mode .table-mode-exit { top: auto; bottom: 0.8rem; left: 50%; transform: translateX(-50%); }
   body.table-mode main { padding-top: 3.6rem; padding-bottom: 4rem; }
 }
+
+/* ---- Page match : callout d'état du tournoi (piste 2 de l'audit) ---- */
+.match-status { max-width: 720px; margin: 0 auto 1rem; }
+.match-status .match-status-text { flex: 1 1 260px; line-height: 1.4; }
+.match-status .match-status-text .muted { display: block; margin-top: 0.15rem; }
+.match-status .match-status-progress .progress { width: 90px; }
+.match-status-slim { background: transparent; border-style: dashed; padding: 0.45rem 0.9rem; font-size: 0.88rem; color: var(--muted); }
+.match-status-slim strong { color: var(--text); font-weight: 600; }
+.match-status-slim .callout-icon { font-size: 1rem; }
+.match-status-next { border-color: rgba(74, 222, 128, 0.55); background: linear-gradient(90deg, rgba(74, 222, 128, 0.14), var(--bg-card) 70%); animation: flash-in 0.3s ease-out; }
+.match-status-next .callout-icon { color: var(--live); }
+.next-table { display: inline-block; font-size: 1.35rem; font-weight: 800; color: var(--gold); line-height: 1; padding: 0 0.2rem; }
+@media (max-width: 560px) { .match-status .btn-gold { width: 100%; } .match-status .match-status-progress { display: none; } .match-status .btn-ghost { width: 100%; } }
+body.table-mode .match-status { display: none !important; }
+
+/* ---- Page match : tuile « TABLE N » au-dessus du versus ---- */
+.match-table-tile { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; margin: -0.2rem 0 1rem; }
+.match-table-tile .my-match-table span { order: -1; }
+.match-table-tile .my-match-table b { font-size: 2.2rem; }
+.match-table-sub { font-size: 0.85rem; }
+@media (max-width: 560px) { .match-table-tile .my-match-table b { font-size: 1.9rem; } }
+body.table-mode .match-table-tile { display: flex !important; }
+body.table-mode .match-table-tile .my-match-table b { font-size: 3.4rem; }
+body.table-mode .match-table-sub { display: none; }

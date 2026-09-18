@@ -2,14 +2,71 @@
 <% const initial = (s) => (s || '?').charAt(0); const isLiveRound = tournament.status === 'en_cours' && round.number === tournament.rounds.length; %>
 
 <div class="match-topline">
-  <p class="muted"><a href="/">Tournois</a> › <a href="/tournaments/<%= tournament._id %>"><%= tournament.name %></a> › Ronde <%= round.number %> · Table <%= match.table %></p>
+  <p class="muted"><a href="/">Tournois</a> › <a href="/tournaments/<%= tournament._id %>"><%= tournament.name %></a> › Ronde <%= round.number %></p>
   <% if (isLiveRound) { %>
     <span class="match-timer-pill" data-started="<%= round.startedAt.getTime() %>" data-length="<%= tournament.roundLength %>"><span class="muted" style="font-weight:500">⏱ Ronde <%= round.number %></span><span class="timer">--:--</span></span>
   <% } %>
 </div>
 
+<%
+/* ---- Callout d'état du tournoi (suit le rafraîchissement automatique de live.js) ----
+   - ronde en cours : avancement des résultats, lien vers le tournoi (discret pendant la saisie, or une fois le match décidé) ;
+   - ronde suivante lancée : ma nouvelle table + adversaire, bouton « Aller à ma table » ;
+   - tournoi clôturé : vainqueur + lien vers le classement. */
+const tUrl = `/tournaments/${tournament._id}`;
+const me0 = currentUser ? currentUser.id : null;
+const roundTables = (round.matches || []).filter((m) => !m.bye);
+const pendingTables = roundTables.filter((m) => !m.result).map((m) => m.table);
+const doneCount = roundTables.length - pendingTables.length;
+const decided0 = (() => { const g0 = match.games || { p1: 0, p2: 0 }; const bo = tournament.bestOf || 1; const played0 = Array.isArray(match.gameResults) ? match.gameResults.length : 0; return g0.p1 === Math.ceil(bo / 2) || g0.p2 === Math.ceil(bo / 2) || played0 >= bo; })();
+const latest = tournament.rounds[tournament.rounds.length - 1];
+const newerRound = tournament.status === 'en_cours' && latest && latest.number > round.number ? latest : null;
+const myNext = newerRound && me0 ? (newerRound.matches || []).find((m) => String(m.p1.userId) === me0 || (m.p2 && String(m.p2.userId) === me0)) || null : null;
+const myNextOpp = myNext && !myNext.bye ? (String(myNext.p1.userId) === me0 ? myNext.p2 : myNext.p1) : null;
+%>
+<% if (newerRound) { %>
+  <div class="callout match-status callout-gold match-status-next" role="status">
+    <span class="callout-icon" aria-hidden="true">▶</span>
+    <span class="match-status-text">
+      <strong>Ronde <%= newerRound.number %> lancée</strong>
+      <% if (myNext && !myNext.bye) { %>— ta table : <span class="next-table"><%= myNext.table %></span>, contre <strong><%= myNextOpp.username %></strong><% if (myNextOpp.deckName) { %> <span class="muted">(<%= myNextOpp.deckName %>)</span><% } %>.
+      <% } else if (myNext && myNext.bye) { %>— tu as le <strong>bye</strong> cette ronde (victoire automatique).
+      <% } else { %>— les pairings sont affichés sur la page du tournoi.<% } %>
+    </span>
+    <span class="spacer"></span>
+    <% if (myNext && !myNext.bye) { %><a href="<%= tUrl %>/rounds/<%= newerRound.number %>/tables/<%= myNext.table %>" class="btn btn-gold">⚔️ Aller à ma table</a><% } %>
+    <a href="<%= tUrl %>" class="btn <%= myNext && !myNext.bye ? 'btn-ghost' : 'btn-gold' %>">Voir les pairings</a>
+  </div>
+<% } else if (tournament.status === 'terminé') { %>
+  <div class="callout match-status callout-gold" role="status">
+    <span class="callout-icon" aria-hidden="true">🏆</span>
+    <span class="match-status-text"><strong>Tournoi clôturé</strong><% if (tournament.winner) { %> — <strong><%= tournament.winner.username %></strong> remporte la coupe<%= tournament.winner.deckName ? ' avec « ' + tournament.winner.deckName + ' »' : '' %>.<% } %></span>
+    <span class="spacer"></span>
+    <a href="<%= tUrl %>?tab=classement" class="btn btn-gold">Voir le classement</a>
+  </div>
+<% } else if (isLiveRound) { %>
+  <div class="callout match-status <%= decided0 ? 'callout-gold' : 'match-status-slim' %>" role="status">
+    <span class="callout-icon" aria-hidden="true"><%= pendingTables.length ? '⏳' : '✅' %></span>
+    <span class="match-status-text">
+      <% if (pendingTables.length) { %>
+        <strong><%= doneCount %>/<%= roundTables.length %> résultats saisis</strong> pour la ronde <%= round.number %> — en attente de la table<%= pendingTables.length > 1 ? 's' : '' %> <%= pendingTables.join(', ') %>.
+        <% if (decided0) { %><span class="muted">La ronde <%= round.number + 1 %> sera lancée par <%= tournament.organizerName %> ; ta prochaine table s'affichera ici automatiquement.</span><% } %>
+      <% } else { %>
+        <strong>Tous les résultats de la ronde <%= round.number %> sont saisis</strong> — <%= tournament.organizerName %> peut lancer la suivante ou clôturer.<% if (decided0) { %> <span class="muted">Ta prochaine table s'affichera ici automatiquement.</span><% } %>
+      <% } %>
+    </span>
+    <span class="spacer"></span>
+    <span class="action-status match-status-progress"><span class="progress" aria-hidden="true"><i style="width:<%= roundTables.length ? Math.round(doneCount / roundTables.length * 100) : 0 %>%"></i></span></span>
+    <a href="<%= tUrl %>" class="btn <%= decided0 ? 'btn-gold' : 'btn-ghost btn-small' %>"><%= decided0 ? 'Retour au tournoi' : 'Tournoi ›' %></a>
+  </div>
+<% } %>
+
 <div class="card match-card">
-  <p class="muted match-meta">Table <%= match.table %> · Bo<%= tournament.bestOf || 1 %> · <%= mySide ? (mySide === 'p1' ? 'tu es à gauche' : 'tu es à droite') : 'ronde ' + round.number %></p>
+  <!-- Numéro de table en évidence : c'est ce que le joueur cherche en arrivant (trouver la table physique). -->
+  <div class="match-table-tile">
+    <div class="my-match-table"><span>Table</span><b><%= match.table %></b></div>
+    <span class="muted match-table-sub">Bo<%= tournament.bestOf || 1 %> · <%= mySide ? (mySide === 'p1' ? 'tu es à gauche' : 'tu es à droite') : 'ronde ' + round.number %></span>
+  </div>
 
   <% const g = match.games || { p1: 0, p2: 0, draws: 0 }; %>
   <% const bestOf = tournament.bestOf || 1; %>
