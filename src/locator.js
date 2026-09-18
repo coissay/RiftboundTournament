@@ -120,7 +120,7 @@ export async function fetchProfile(auth) {
 }
 
 export async function fetchStats(auth) {
-  return call(`/api/v2/player/games/${GAME}/stats/`, auth);
+  return call(`/api/v2/player/games/${GAME}/stats/?game_slug=${GAME}`, auth);
 }
 
 /**
@@ -128,11 +128,12 @@ export async function fetchStats(auth) {
  * L'API valide les paramètres de requête (« Form is invalid » en 400) : on essaie plusieurs
  * variantes de pagination, de la plus efficace à la plus simple, et on garde celle qui passe.
  */
+// `game_slug` est exigé en paramètre de requête (en plus du chemin) : « This field is required ».
 const HISTORY_QUERY_VARIANTS = [
-  (page) => `?page=${page}&page_size=100`,
-  (page) => `?page=${page}&page_size=20`,
-  (page) => `?page=${page}`,
-  () => '',
+  (page) => `?game_slug=${GAME}&page=${page}&page_size=100`,
+  (page) => `?game_slug=${GAME}&page=${page}&page_size=20`,
+  (page) => `?game_slug=${GAME}&page=${page}`,
+  () => `?game_slug=${GAME}`,
 ];
 
 export async function fetchTournamentHistory(auth) {
