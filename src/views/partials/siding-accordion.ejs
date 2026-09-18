@@ -12,29 +12,43 @@ const resultOf = (n) => { const r = match.gameResults[n - 1]; return r === 'draw
 %>
 <div class="card match-card" id="side-deck">
   <h2>🔁 Side decks du match <span class="muted">— récapitulatif par manche</span></h2>
-  <p class="muted">Tournoi clôturé : les échanges des deux joueurs sont visibles. <% if (bo < 2) { %>En Bo1, l'unique manche peut être sidée.<% } else { %>La manche 1 se joue avec le deck inscrit, les sides des manches suivantes sont exprimés par rapport à lui.<% } %><% if (mySide) { %> Tu peux encore corriger les tiens.<% } %></p>
+  <p class="muted">Tournoi clôturé : les échanges des deux joueurs sont visibles<% if (mySide) { %>, tu peux encore corriger les tiens<% } %>.</p>
   <div class="siding-accordion">
   <% for (let n = 1; n <= bo; n++) { const sidable = sidingGames.includes(n); const st = statusOf(n); %>
     <% const mine = mySide ? mySiding.games[n] || null : null; %>
     <% let prev = null; for (let k = n - 1; k >= (sidingGames[0] || 1) && !prev; k--) prev = mySide ? mySiding.games[k] || null : null; %>
     <details class="siding-panel <%= st === 'à jouer' ? 'siding-panel-current' : '' %>" id="siding-game-<%= n %>" <%= (isRecap ? sidable && hasSide(n) : n === currentGame && sidable) ? 'open' : '' %>>
       <summary>
-        <span class="siding-panel-title">Manche <%= n %></span>
+        <span class="siding-panel-title"><%= sidable ? 'Manche ' + n : 'Decks de base' %></span>
         <span class="badge <%= st === 'jouée' ? 'badge-done' : st === 'à jouer' ? 'badge-live' : 'badge-open' %>"><%= st === 'jouée' ? '✓ ' + resultOf(n) : st === 'à jouer' ? '▶ à jouer' : st %></span>
         <span class="muted siding-panel-summary">
-          <% if (!sidable) { %>deck inscrit, pas de side
+          <% if (!sidable) { %>manche <%= n %> jouée avec les decks inscrits — les sides suivants s'expriment par rapport à eux
           <% } else if (mySide) { %>mon side : <%= mine ? sideSummary(mine) : 'non noté' %>
           <% } else { %><%= ['p1','p2'].map(s => match[s].username + ' : ' + (siding[s].games[n] ? (sidingVisible[s] ? sideSummary(siding[s].games[n]) : '🔒') : '—')).join(' · ') %><% } %>
         </span>
       </summary>
       <div class="siding-panel-body">
         <% if (!sidable) { %>
-          <p class="muted">Les deux joueurs jouent leur deck inscrit : <%= match.p1.deckName %> (<%= match.p1.username %>) et <%= match.p2.deckName %> (<%= match.p2.username %>).</p>
+          <div class="siding-grid">
+            <% for (const side of (mySide ? [mySide, oppSide] : ['p1', 'p2'])) { const p = match[side]; const bd = (typeof baseDecks !== 'undefined' && baseDecks) ? baseDecks[side] : null; %>
+              <div class="siding-col">
+                <h3><%= side === mySide ? 'Mon deck' : 'Deck de ' + p.username %> <span class="muted deck-tag"><%= p.deckName || 'deck non renseigné' %><%= p.deckName && p.deckVersion ? ' v' + p.deckVersion : '' %></span></h3>
+                <% if (bd) { %>
+                  <p class="muted">principal <%= bd.mainCount %> · réserve <%= bd.sideCount %><% if (p.deckId) { %> · <a href="/decks/<%= p.deckId %>">fiche du deck</a><% } %></p>
+                  <div class="sided-deck-view base-deck-view"><%- include('deck-view', { resolved: bd.resolved, thumb, compact: true }) %></div>
+                <% } else if (!p.deckName) { %>
+                  <p class="muted">Aucun deck renseigné pour ce tournoi.</p>
+                <% } else { %>
+                  <p class="muted">Liste du deck indisponible (deck supprimé).</p>
+                <% } %>
+              </div>
+            <% } %>
+          </div>
         <% } else { %>
           <div class="siding-grid">
             <% for (const side of (mySide ? [mySide, oppSide] : ['p1', 'p2'])) { const p = match[side]; const sd = siding[side].games[n]; %>
               <div class="siding-col">
-                <h3><%= side === mySide ? 'Mon side' : 'Side de ' + p.username %> <span class="muted deck-tag"><%= p.deckName %><%= p.deckVersion ? ' v' + p.deckVersion : '' %></span></h3>
+                <h3><%= side === mySide ? 'Mon side' : 'Side de ' + p.username %> <span class="muted deck-tag"><%= p.deckName || 'deck non renseigné' %><%= p.deckName && p.deckVersion ? ' v' + p.deckVersion : '' %></span></h3>
                 <% if (side === mySide) { %>
                   <% if (mine) { %><%- include('siding-chips', { sd: mine, sdk: sidedDecks[side][n] || null, n, cardImage, thumb }) %><% } else { %><p class="muted">Aucun échange noté (deck inscrit).</p><% } %>
                   <details class="siding-form">

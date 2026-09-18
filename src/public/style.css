@@ -496,6 +496,7 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .sided-deck summary { list-style: none; cursor: pointer; display: inline-block; }
 .sided-deck summary::-webkit-details-marker { display: none; }
 .sided-deck-view { margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px solid var(--border); }
+.base-deck-view { margin-top: 0.3rem; padding-top: 0; border-top: 0; }
 .card-thumb.card-sided-in { outline: 2px solid var(--live); outline-offset: -2px; }
 .card-thumb.card-sided-out { outline: 2px solid var(--danger); outline-offset: -2px; }
 .sided-badge {

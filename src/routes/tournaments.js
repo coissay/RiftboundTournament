@@ -426,6 +426,17 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
         if (sd.out.length || sd.in.length) sidedDecks[side][n] = await sidedDeckFor(req.db, match[side], sd);
       }
     }
+    // Récapitulatif après clôture : decks inscrits (de base) des deux joueurs, côte à côte.
+    const baseDecks = { p1: null, p2: null };
+    if (tournament.status === 'terminé') {
+      for (const side of ['p1', 'p2']) {
+        const lines = await deckLinesFor(req.db, match[side]);
+        if (!lines) continue;
+        const resolved = resolveDecklist(lines.text);
+        const count = (key) => resolved.sections.find((s) => s.key === key)?.count || 0;
+        baseDecks[side] = { resolved, mainCount: count('main'), sideCount: count('sideboard') };
+      }
+    }
     const mySide = me ? (String(match.p1.userId) === String(me.userId) ? 'p1' : 'p2') : null;
     const played = Array.isArray(match.gameResults) ? match.gameResults.length : 0;
     res.render('match', {
@@ -437,6 +448,7 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
       siding,
       sidingVisible: visible,
       sidedDecks,
+      baseDecks,
       thumb,
       me,
       mySide,

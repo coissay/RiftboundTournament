@@ -15,7 +15,7 @@
     <div class="versus-side <%= match.result === 'p1' && decided ? 'versus-winner' : '' %>">
       <span class="versus-name"><%= match.p1.username %></span>
       <span class="muted">(<%= recordOf[String(match.p1.userId)] || '0-0-0' %>)</span>
-      <span class="muted deck-tag"><%= match.p1.deckName %></span>
+      <span class="muted deck-tag"><%= match.p1.deckName || 'deck non renseigné' %></span>
     </div>
     <div class="versus-center">
       <div class="versus-score"><%= g.p1 %> — <%= g.p2 %></div>
@@ -25,7 +25,7 @@
     <div class="versus-side <%= match.result === 'p2' && decided ? 'versus-winner' : '' %>">
       <span class="versus-name"><%= match.p2.username %></span>
       <span class="muted">(<%= recordOf[String(match.p2.userId)] || '0-0-0' %>)</span>
-      <span class="muted deck-tag"><%= match.p2.deckName %></span>
+      <span class="muted deck-tag"><%= match.p2.deckName || 'deck non renseigné' %></span>
     </div>
   </div>
 
