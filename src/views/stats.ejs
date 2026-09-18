@@ -1,74 +1,78 @@
 <%- include('partials/head', { title: 'Statistiques' }) %>
+<% const initial = (s) => (s || '?').charAt(0); const me = currentUser ? currentUser.id : null; %>
 
 <div class="page-head">
   <div>
     <h1>Statistiques</h1>
-    <p class="muted">Tous tournois confondus. Les byes sont exclus, un match nul compte pour une demi-victoire dans le win rate. Les matchs free play ont <a href="/free-play/stats">leurs propres stats</a>.</p>
+    <p class="muted">Tous tournois confondus · byes exclus · un nul = ½ victoire dans le win rate.</p>
   </div>
-  <a href="/free-play/stats" class="btn btn-ghost">Stats free play →</a>
 </div>
+
+<nav class="tabs">
+  <a href="/stats" class="active">🏆 Tournois</a>
+  <a href="/free-play/stats">🎲 Free play</a>
+</nav>
 
 <div class="stats-grid">
   <div class="card">
-    <h2>🏆 Joueurs</h2>
-    <% if (players.length === 0) { %><div class="empty">Aucun match joué pour l'instant.</div><% } else { %>
-    <table class="table">
-      <thead><tr><th>Joueur</th><th>Coupes</th><th>Matchs</th><th>V-N-D</th><th>Manches</th><th>Win rate</th><th>GW%</th></tr></thead>
+    <div class="card-head"><h2>Joueurs <span class="count">(<%= players.length %>)</span></h2><span class="muted">classés par win rate</span></div>
+    <% if (players.length === 0) { %><div class="empty"><span class="empty-icon">📊</span><strong>Aucun match joué pour l'instant</strong><p>Les stats apparaissent dès la première ronde saisie.</p></div><% } else { %>
+    <div class="table-scroll">
+    <table class="table table-dense">
+      <thead><tr><th>#</th><th>Joueur</th><th class="num">Coupes</th><th class="num">Matchs</th><th class="num">V-N-D</th><th class="num col-secondary">Manches</th><th>Win rate</th><th class="num col-secondary">GW%</th></tr></thead>
       <tbody>
-      <% for (const p of players) { %>
-        <tr>
-          <td><a href="/players/<%= p.userId %>"><strong><%= p.username %></strong></a></td>
-          <td><%= p.cups ? '🏆'.repeat(Math.min(p.cups, 5)) + (p.cups > 5 ? ' ×' + p.cups : '') : '—' %></td>
-          <td><%= p.matches %></td>
-          <td><%= p.wins %>-<%= p.draws %>-<%= p.losses %></td>
-          <td><%= p.gameWins %>-<%= p.gameDraws %>-<%= p.gameLosses %></td>
-          <td>
-            <div class="rate-bar"><div class="rate-fill" style="width: <%= (p.winRate * 100).toFixed(0) %>%"></div></div>
-            <%= (p.winRate * 100).toFixed(1) %>%
-          </td>
-          <td><%= (p.gameWinRate * 100).toFixed(1) %>%</td>
+      <% players.forEach((p, i) => { %>
+        <tr class="<%= me === String(p.userId) ? 'row-me' : '' %>">
+          <td><span class="rank <%= i < 3 ? 'rank-' + (i + 1) : '' %>"><%= i + 1 %></span></td>
+          <td><a href="/players/<%= p.userId %>" class="player-cell"><span class="avatar"><%= initial(p.username) %></span><strong><%= p.username %></strong></a></td>
+          <td class="num cups-cell"><%= p.cups ? '🏆 ×' + p.cups : '—' %></td>
+          <td class="num"><%= p.matches %></td>
+          <td class="num"><%= p.wins %>-<%= p.draws %>-<%= p.losses %></td>
+          <td class="num col-secondary"><%= p.gameWins %>-<%= p.gameDraws %>-<%= p.gameLosses %></td>
+          <td><span class="rate-cell"><span class="rate-bar"><span class="rate-fill" style="width: <%= (p.winRate * 100).toFixed(0) %>%"></span></span><b><%= (p.winRate * 100).toFixed(0) %> %</b></span></td>
+          <td class="num col-secondary"><%= (p.gameWinRate * 100).toFixed(0) %> %</td>
         </tr>
-      <% } %>
+      <% }) %>
       </tbody>
     </table>
+    </div>
     <% } %>
   </div>
 
   <div class="card">
-    <h2>🃏 Decks</h2>
-    <% if (decks.length === 0) { %><div class="empty">Aucun match joué pour l'instant.</div><% } else { %>
-    <table class="table">
-      <thead><tr><th>Deck</th><th>Joueur</th><th>Coupes</th><th>Matchs</th><th>V-N-D</th><th>Manches</th><th>Win rate</th><th>GW%</th></tr></thead>
+    <div class="card-head"><h2>Decks <span class="count">(<%= decks.length %>)</span></h2><span class="muted">↳ détail par version quand le deck a évolué</span></div>
+    <% if (decks.length === 0) { %><div class="empty"><span class="empty-icon">🃏</span><strong>Aucun match joué pour l'instant</strong></div><% } else { %>
+    <div class="table-scroll">
+    <table class="table table-dense">
+      <thead><tr><th>Deck</th><th class="col-secondary">Joueur</th><th class="num">Coupes</th><th class="num">Matchs</th><th class="num">V-N-D</th><th class="num col-secondary">Manches</th><th>Win rate</th><th class="num col-secondary">GW%</th></tr></thead>
       <tbody>
       <% for (const d of decks) { %>
         <tr>
           <td><strong><% if (d.deckId) { %><a href="/decks/<%= d.deckId %>"><%= d.deckName %></a><% } else { %><%= d.deckName %><% } %></strong><% if (d.versions.length > 1) { %> <span class="muted">(<%= d.versions.length %> versions)</span><% } %></td>
-          <td class="muted"><a href="/players/<%= d.ownerId %>"><%= d.ownerName %></a></td>
-          <td><%= d.cups ? '🏆'.repeat(Math.min(d.cups, 5)) + (d.cups > 5 ? ' ×' + d.cups : '') : '—' %></td>
-          <td><%= d.matches %></td>
-          <td><%= d.wins %>-<%= d.draws %>-<%= d.losses %></td>
-          <td><%= d.gameWins %>-<%= d.gameDraws %>-<%= d.gameLosses %></td>
-          <td>
-            <div class="rate-bar"><div class="rate-fill" style="width: <%= (d.winRate * 100).toFixed(0) %>%"></div></div>
-            <%= (d.winRate * 100).toFixed(1) %>%
-          </td>
-          <td><%= (d.gameWinRate * 100).toFixed(1) %>%</td>
+          <td class="muted col-secondary"><a href="/players/<%= d.ownerId %>"><%= d.ownerName %></a></td>
+          <td class="num cups-cell"><%= d.cups ? '🏆 ×' + d.cups : '—' %></td>
+          <td class="num"><%= d.matches %></td>
+          <td class="num"><%= d.wins %>-<%= d.draws %>-<%= d.losses %></td>
+          <td class="num col-secondary"><%= d.gameWins %>-<%= d.gameDraws %>-<%= d.gameLosses %></td>
+          <td><span class="rate-cell"><span class="rate-bar"><span class="rate-fill" style="width: <%= (d.winRate * 100).toFixed(0) %>%"></span></span><b><%= (d.winRate * 100).toFixed(0) %> %</b></span></td>
+          <td class="num col-secondary"><%= (d.gameWinRate * 100).toFixed(0) %> %</td>
         </tr>
         <% if (d.versions.length > 1) { for (const v of d.versions) { %>
           <tr class="row-version">
             <td class="muted">↳ <a href="/decks/<%= d.deckId %>/versions/<%= v.version %>" class="version-chip">v<%= v.version %></a></td>
-            <td></td>
-            <td><%= v.cups ? '🏆'.repeat(Math.min(v.cups, 5)) : '—' %></td>
-            <td><%= v.matches %></td>
-            <td><%= v.wins %>-<%= v.draws %>-<%= v.losses %></td>
-            <td><%= v.gameWins %>-<%= v.gameDraws %>-<%= v.gameLosses %></td>
-            <td><%= (v.winRate * 100).toFixed(1) %>%</td>
-            <td><%= (v.gameWinRate * 100).toFixed(1) %>%</td>
+            <td class="col-secondary"></td>
+            <td class="num cups-cell"><%= v.cups ? '🏆 ×' + v.cups : '—' %></td>
+            <td class="num"><%= v.matches %></td>
+            <td class="num"><%= v.wins %>-<%= v.draws %>-<%= v.losses %></td>
+            <td class="num col-secondary"><%= v.gameWins %>-<%= v.gameDraws %>-<%= v.gameLosses %></td>
+            <td class="muted"><%= (v.winRate * 100).toFixed(0) %> %</td>
+            <td class="num col-secondary"><%= (v.gameWinRate * 100).toFixed(0) %> %</td>
           </tr>
         <% } } %>
       <% } %>
       </tbody>
     </table>
+    </div>
     <% } %>
   </div>
 </div>

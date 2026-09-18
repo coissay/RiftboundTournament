@@ -1,34 +1,60 @@
 <%- include('partials/head', { title: deck.name }) %>
+<%
+/* Maquette audit : agrégat des stats de toutes les versions pour la bannière */
+const tot = { m: 0, w: 0, d: 0, l: 0, cups: 0, fm: 0, fw: 0 };
+for (const v of versions) { const st = versionStats[v.version]; if (!st) continue;
+  tot.m += st.tournois.matches || 0; tot.w += st.tournois.wins || 0; tot.d += st.tournois.draws || 0; tot.l += st.tournois.losses || 0; tot.cups += st.tournois.cups || 0;
+  tot.fm += st.freeplay.matches || 0; tot.fw += st.freeplay.wins || 0; }
+const wr = tot.m ? Math.round((tot.w + tot.d / 2) / tot.m * 100) : null;
+%>
 
-<div class="page-head">
-  <div>
-    <h1><%= deck.name %></h1>
-    <p class="muted">par <a href="/players/<%= deck.ownerId %>"><%= deck.ownerName %></a> · <span class="version-chip">v<%= currentVersion %></span><% if (versions.length > 1) { %> · <%= versions.length %> versions<% } %></p>
+<p class="t-breadcrumb muted"><a href="/decks">Mes decks</a> › <%= deck.name %></p>
+<header class="deck-banner">
+  <% if (resolved.legendCard && resolved.legendCard.image) { %><div class="deck-banner-bg" style="background-image:url('<%= thumb(resolved.legendCard.image, 400) %>')"></div><% } %>
+  <div class="deck-banner-inner">
+    <div class="deck-banner-art">
+      <% if (resolved.legendCard && resolved.legendCard.image) { %><a href="<%= resolved.legendCard.image %>" target="_blank" rel="noopener" class="card-thumb" data-full="<%= resolved.legendCard.image %>" style="aspect-ratio:auto;background:none;overflow:visible"><img src="<%= thumb(resolved.legendCard.image, 400) %>" alt="<%= resolved.legend %>"></a><% } %>
+      <% if (resolved.championCard && resolved.championCard.image) { %><a href="<%= resolved.championCard.image %>" target="_blank" rel="noopener" class="card-thumb" data-full="<%= resolved.championCard.image %>" style="aspect-ratio:auto;background:none;overflow:visible"><img class="champ" src="<%= thumb(resolved.championCard.image, 400) %>" alt="<%= resolved.champion %>"></a><% } %>
+    </div>
+    <div class="deck-banner-body">
+      <div class="t-hero-top"><span class="version-chip">v<%= currentVersion %></span><% if (versions.length > 1) { %><span class="muted"><%= versions.length %> versions</span><% } %></div>
+      <h1><%= deck.name %></h1>
+      <div class="legend-line"><span class="muted">Légende</span> <b><%= resolved.legend %></b><% if (resolved.champion) { %> <span class="muted">· Champion</span> <b><%= resolved.champion %></b><% } %></div>
+      <div><% for (const dom of resolved.domains) { %><span class="domain domain-<%= dom.toLowerCase() %>"><%= dom %></span><% } %> <span class="muted"><%= resolved.total %> cartes hors réserve<% if (resolved.unknown) { %> · <span class="warn">⚠ <%= resolved.unknown %> non reconnue(s)</span><% } %></span></div>
+      <div class="deck-banner-stats">
+        <span>👤 <a href="/players/<%= deck.ownerId %>"><%= deck.ownerName %></a></span>
+        <span>🏆 Tournois : <b><%= tot.m ? tot.w + '-' + tot.d + '-' + tot.l : '—' %></b><%= wr !== null ? ' · ' + wr + ' % de victoires' : '' %><%= tot.cups ? ' · ' + '🏆'.repeat(Math.min(tot.cups, 5)) : '' %></span>
+        <span>🎲 Free play : <b><%= tot.fm ? tot.fw + ' / ' + tot.fm : '—' %></b></span>
+      </div>
+    </div>
+    <div class="deck-banner-actions">
+      <div class="row-actions">
+        <% if (isOwner) { %><a href="/decks/<%= deck._id %>/edit" class="btn btn-gold">Modifier</a><a href="/deckbuilder?deck=<%= deck._id %>" class="btn btn-ghost">🛠️ Deckbuilder</a><% } %>
+        <button class="btn btn-ghost" type="button" onclick="navigator.clipboard.writeText(document.getElementById('raw-decklist').textContent).then(()=>{this.textContent='Copié !'})">📋 Copier la liste</button>
+      </div>
+    </div>
   </div>
-  <div class="row-actions">
-    <% if (isOwner) { %><a href="/deckbuilder?deck=<%= deck._id %>" class="btn btn-ghost">Ouvrir dans le deckbuilder</a><a href="/decks/<%= deck._id %>/edit" class="btn btn-ghost">Modifier</a><% } %>
-    <a href="/decks" class="btn btn-ghost">← Mes decks</a>
-  </div>
-</div>
+</header>
 
-<div class="deck-detail">
+<div class="deck-detail deck-page">
   <div class="card deck-detail-view">
     <%- include('partials/deck-view', { resolved, thumb }) %>
   </div>
   <aside class="deck-detail-side">
     <% if (deck.notes) { %><div class="card"><h2>Notes</h2><p class="deck-notes"><%= deck.notes %></p></div><% } %>
     <div class="card">
-      <h2>Decklist</h2>
-      <pre class="decklist" id="raw-decklist"><%= deck.cards %></pre>
-      <button class="btn btn-ghost btn-small" type="button" onclick="navigator.clipboard.writeText(document.getElementById('raw-decklist').textContent).then(()=>{this.textContent='Copié !'})">Copier</button>
+      <details>
+        <summary class="btn btn-ghost btn-small" style="list-style:none">Decklist texte (export)</summary>
+        <pre class="decklist" id="raw-decklist" style="margin-top:0.6rem"><%= deck.cards %></pre>
+      </details>
     </div>
   </aside>
 </div>
 
 <div class="card">
-  <h2>🕓 Historique des versions</h2>
-  <p class="muted">Une version est créée à chaque modification des cartes : ajouts (+), retraits (−) et déplacements (⇄) entre deck principal et réserve. Les stats sont celles des matchs joués avec cette version précise (tournois : matchs hors bye · free play : matchs clôturés).</p>
-  <div class="version-list">
+  <h2>🕓 Historique des versions <span class="count">(<%= versions.length %>)</span></h2>
+  <p class="muted">Une version est créée à chaque modification des cartes : ajouts (+), retraits (−) et déplacements (⇄) entre deck principal et réserve. Les stats sont celles des matchs joués avec cette version précise.</p>
+  <div class="version-list version-timeline">
   <% for (const v of versions) { const st = versionStats[v.version]; %>
     <div class="version-item <%= v.version === currentVersion ? 'version-current' : '' %>">
       <div class="version-head">

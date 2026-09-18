@@ -1,43 +1,55 @@
 <%- include('partials/head', { title: 'Mes decks' }) %>
 
 <div class="page-head">
-  <h1>Mes decks</h1>
+  <div>
+    <h1>Mes decks</h1>
+    <p class="muted"><%= decks.length %> deck<%= decks.length > 1 ? 's' : '' %> · colle un export texte ou construis-le dans le deckbuilder.</p>
+  </div>
   <div class="row-actions">
-    <a href="/deckbuilder" class="btn btn-ghost">Deckbuilder</a>
+    <a href="/deckbuilder" class="btn btn-ghost">🛠️ Deckbuilder</a>
     <a href="/decks/new" class="btn btn-gold">+ Nouveau deck</a>
   </div>
 </div>
 
 <% if (decks.length === 0) { %>
-  <div class="empty">Aucun deck. Crée ton premier deck pour pouvoir t'inscrire aux tournois !</div>
+  <div class="empty">
+    <span class="empty-icon">🃏</span>
+    <strong>Aucun deck pour l'instant</strong>
+    <p>Un deck est nécessaire pour s'inscrire à un tournoi. Colle l'export texte de ta decklist, ou construis-la carte par carte.</p>
+    <div class="row-actions"><a href="/decks/new" class="btn btn-gold">Coller une decklist</a><a href="/deckbuilder" class="btn btn-ghost">Ouvrir le deckbuilder</a></div>
+  </div>
 <% } %>
 
 <div class="deck-grid">
 <% for (const d of decks) { const r = d.resolved; %>
   <div class="card deck-card">
-    <div class="deck-card-head">
+    <div class="deck-card-cover">
       <% if (r.legendCard && r.legendCard.image) { %>
         <a href="/decks/<%= d._id %>" class="deck-card-legend card-thumb" data-full="<%= r.legendCard.image %>"><img src="<%= thumb(r.legendCard.image, 200) %>" alt="<%= r.legend %>" loading="lazy"></a>
       <% } %>
       <div>
         <h2><a href="/decks/<%= d._id %>"><%= d.name %></a></h2>
-        <% if (d.legend) { %><p class="legend">Légende : <strong><%= d.legend %></strong></p><% } %>
+        <% if (d.legend) { %><p class="legend"><span class="muted">Légende</span> <strong><%= d.legend %></strong></p><% } %>
         <% if (r.champion) { %><p class="legend muted">Champion : <%= r.champion %></p><% } %>
         <% if (d.domains && d.domains.length) { %>
           <p><% for (const dom of d.domains) { %><span class="domain domain-<%= dom.toLowerCase() %>"><%= dom %></span><% } %></p>
         <% } %>
       </div>
     </div>
-    <% if (!r.empty) { %>
-      <p class="muted"><%= r.total %> carte(s)<% if (r.unknown) { %> · <span class="warn">⚠ <%= r.unknown %> non reconnue(s)</span><% } %><% if (d.battlefields) { %> · <%= d.battlefields %><% } %></p>
-    <% } %>
-    <% if (d.notes) { %><p class="muted deck-notes"><%= d.notes %></p><% } %>
-    <div class="row-actions">
-      <a href="/decks/<%= d._id %>" class="btn btn-ghost">Voir</a>
-      <a href="/decks/<%= d._id %>/edit" class="btn btn-ghost">Modifier</a>
-      <a href="/deckbuilder?deck=<%= d._id %>" class="btn btn-ghost">Ouvrir dans le deckbuilder</a>
+    <div class="deck-card-body">
+      <% if (!r.empty) { %>
+        <p class="muted"><%= r.total %> cartes<% if (r.unknown) { %> · <span class="warn">⚠ <%= r.unknown %> non reconnue(s)</span><% } %><% if (d.version) { %> · <span class="version-chip">v<%= d.version %></span><% } %></p>
+        <% if (d.battlefields) { %><p class="muted">🏰 <%= d.battlefields %></p><% } %>
+      <% } %>
+      <% if (d.notes) { %><p class="muted deck-notes"><%= d.notes %></p><% } %>
+    </div>
+    <div class="deck-card-foot">
+      <a href="/decks/<%= d._id %>" class="btn btn-gold btn-small">Voir le deck</a>
+      <a href="/decks/<%= d._id %>/edit" class="btn btn-ghost btn-small">Modifier</a>
+      <a href="/deckbuilder?deck=<%= d._id %>" class="btn btn-ghost btn-small" title="Ouvrir dans le deckbuilder">🛠️</a>
+      <span class="spacer"></span>
       <form method="post" action="/decks/<%= d._id %>/delete" class="inline" data-confirm="Le deck sera supprimé. Ses stats et résultats passés sont conservés." data-confirm-title="Supprimer ce deck ?">
-        <button class="btn btn-danger">Supprimer</button>
+        <button class="btn btn-danger-text">Supprimer</button>
       </form>
     </div>
   </div>

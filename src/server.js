@@ -3,7 +3,7 @@ import session from 'express-session';
 import MongoStore from 'connect-mongo';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { connect, MONGO_URL, DB_NAME } from './db.js';
+import { connect, MONGO_URL, DB_NAME, oid } from './db.js';
 import { initCatalog } from './cards.js';
 import { isAdmin } from './middleware.js';
 import { startHousekeeping } from './housekeeping.js';
@@ -44,9 +44,37 @@ app.use(
 app.use((req, res, next) => {
   req.db = db;
   res.locals.currentUser = req.session.user || null;
+  res.locals.currentPath = req.path;
   res.locals.isAdmin = isAdmin(req.session.user);
   res.locals.flash = req.session.flash || null;
   delete req.session.flash;
+  next();
+});
+
+// Bannière persistante : un match m'attend dans la ronde en cours d'un tournoi (résultat non saisi).
+app.use(async (req, res, next) => {
+  res.locals.pendingMatch = null;
+  if (!req.session.user || req.method !== 'GET' || req.path.startsWith('/api/')) return next();
+  try {
+    const me = req.session.user.id;
+    const live = await db
+      .collection('tournaments')
+      .find({ status: 'en_cours', 'players.userId': oid(me) }, { projection: { name: 1, rounds: 1, roundLength: 1 } })
+      .toArray();
+    for (const t of live) {
+      const round = (t.rounds || [])[t.rounds.length - 1];
+      if (!round) continue;
+      const m = (round.matches || []).find((x) => !x.bye && !x.result && [String(x.p1.userId), String(x.p2?.userId)].includes(me));
+      if (!m) continue;
+      const opp = String(m.p1.userId) === me ? m.p2 : m.p1;
+      const url = `/tournaments/${t._id}/rounds/${round.number}/tables/${m.table}`;
+      if (req.path.startsWith(`/tournaments/${t._id}`)) break; // déjà sur le tournoi (barre « Ma table ») ou le match
+      res.locals.pendingMatch = { url, tournamentName: t.name, round: round.number, table: m.table, opponent: opp.username, startedAt: round.startedAt, roundLength: t.roundLength };
+      break;
+    }
+  } catch (err) {
+    console.error('pendingMatch', err.message);
+  }
   next();
 });
 

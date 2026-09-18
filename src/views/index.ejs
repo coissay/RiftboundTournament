@@ -1,41 +1,159 @@
 <%- include('partials/head', { title: 'Tournois' }) %>
+<%
+/* ---- Maquette audit : « ma prochaine étape » calculée à partir des tournois chargés ---- */
+const me = currentUser ? currentUser.id : null;
+const fmtDur = (m) => Math.floor(m / 60) + 'h' + (m % 60 ? String(m % 60).padStart(2, '0') : '');
+const live = tournaments.filter((t) => t.status === 'en_cours');
+const upcoming = tournaments.filter((t) => t.status === 'inscriptions').sort((a, b) => a.date - b.date);
+const done = tournaments.filter((t) => t.status === 'terminé');
+const isIn = (t) => me && (t.players || []).some((p) => String(p.userId) === me);
+// Tournoi en cours où je joue (sinon le premier en cours), et mon match de la ronde courante
+const myLive = live.find(isIn) || live[0] || null;
+let myMatch = null, lastRound = null;
+if (myLive) {
+  lastRound = myLive.rounds[myLive.rounds.length - 1] || null;
+  if (lastRound && me) myMatch = lastRound.matches.find((m) => String(m.p1.userId) === me || (m.p2 && String(m.p2.userId) === me)) || null;
+}
+const nextT = upcoming[0] || null;
+const myCups = me ? done.filter((t) => t.winner && String(t.winner.userId) === me).length : 0;
+const played = me ? tournaments.filter(isIn).length : 0;
+%>
 
 <div class="page-head">
-  <h1>Tournois</h1>
+  <div>
+    <h1>Tournois</h1>
+    <p class="muted">Rondes suisses entre collègues · Bo1/Bo3/Bo5 · timer de ronde · coupe au vainqueur.</p>
+  </div>
   <% if (currentUser) { %>
     <a href="/tournaments/new" class="btn btn-gold">+ Nouveau tournoi</a>
   <% } %>
 </div>
 
-<% if (tournaments.length === 0) { %>
-  <div class="empty">Aucun tournoi pour le moment. <% if (currentUser) { %>Lance le premier !<% } else { %>Crée un compte pour en organiser un.<% } %></div>
+<% if (myLive || nextT) { %>
+<div class="home-hero">
+  <% if (myLive) { const opp = myMatch ? (String(myMatch.p1.userId) === me ? myMatch.p2 : myMatch.p1) : null; const pending = lastRound ? lastRound.matches.filter((m) => !m.result).length : 0; %>
+    <section class="hero-card hero-live">
+      <div class="hero-kicker"><span class="badge badge-live">En cours</span> Ronde <%= lastRound ? lastRound.number : '—' %> · <%= myLive.players.filter(p => !p.dropped).length %> joueurs</div>
+      <h2><a href="/tournaments/<%= myLive._id %>"><%= myLive.name %></a></h2>
+      <% if (lastRound) { %>
+        <div class="my-match" data-started="<%= lastRound.startedAt.getTime() %>" data-length="<%= myLive.roundLength %>">
+          <% if (myMatch && !myMatch.bye) { %>
+            <div class="my-match-table"><b><%= myMatch.table %></b><span>table</span></div>
+            <div class="my-match-body">
+              <strong>Ma table : contre <%= opp.username %></strong>
+              <div class="muted"><%= opp.deckName || 'deck non renseigné' %> · <%= myMatch.result ? 'résultat saisi ✓' : 'résultat à saisir' %></div>
+            </div>
+            <div class="hero-timer timer">--:--</div>
+          <% } else if (myMatch && myMatch.bye) { %>
+            <div class="my-match-table"><b>—</b><span>bye</span></div>
+            <div class="my-match-body"><strong>Tu as le bye cette ronde</strong><div class="muted">victoire automatique, profite de la pause ☕</div></div>
+            <div class="hero-timer timer">--:--</div>
+          <% } else { %>
+            <div class="my-match-body"><strong>Ronde <%= lastRound.number %> en cours</strong><div class="muted"><%= pending %> table<%= pending > 1 ? 's' : '' %> en attente de résultat</div></div>
+            <div class="hero-timer timer">--:--</div>
+          <% } %>
+        </div>
+      <% } %>
+      <div class="hero-actions">
+        <% if (myMatch && !myMatch.bye && lastRound) { %>
+          <a href="/tournaments/<%= myLive._id %>/rounds/<%= lastRound.number %>/tables/<%= myMatch.table %>" class="btn btn-gold btn-primary-lg"><%= myMatch.result ? 'Voir / modifier le résultat' : '⚔️ Saisir le résultat' %></a>
+        <% } %>
+        <a href="/tournaments/<%= myLive._id %>?tab=classement" class="btn btn-ghost">Classement</a>
+        <a href="/tournaments/<%= myLive._id %>" class="btn btn-ghost">Pairings</a>
+      </div>
+    </section>
+  <% } else { %>
+    <section class="hero-card">
+      <div class="hero-kicker"><span class="badge badge-open">Prochain tournoi</span> <%= nextT.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) %> à <%= nextT.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) %></div>
+      <h2><a href="/tournaments/<%= nextT._id %>"><%= nextT.name %></a></h2>
+      <p class="hero-meta"><span>⏱ <%= fmtDur(nextT.durationMinutes) %></span><span>🕐 rondes de <%= nextT.roundLength %> min</span><span>⚔️ Bo<%= nextT.bestOf || 1 %></span><span>👤 <%= nextT.organizerName %></span></p>
+      <% if (nextT.description) { %><p class="muted" style="margin:0"><%= nextT.description %></p><% } %>
+      <div class="hero-actions">
+        <% if (isIn(nextT)) { %><span class="badge badge-live">✓ Inscrit·e</span><a href="/tournaments/<%= nextT._id %>" class="btn btn-ghost">Voir le tournoi</a>
+        <% } else if (currentUser) { %><a href="/tournaments/<%= nextT._id %>" class="btn btn-gold btn-primary-lg">S'inscrire avec un deck</a>
+        <% } else { %><a href="/login" class="btn btn-gold">Se connecter pour s'inscrire</a><% } %>
+        <span class="muted"><span class="avatar-stack"><% for (const p of (nextT.players || []).slice(0, 5)) { %><span class="avatar" title="<%= p.username %>"><%= p.username.charAt(0) %></span><% } %></span> <%= (nextT.players || []).length %> inscrit<%= (nextT.players || []).length > 1 ? 's' : '' %></span>
+      </div>
+    </section>
+  <% } %>
+
+  <aside class="hero-side">
+    <% if (myLive && nextT) { %>
+      <div class="card" style="margin:0">
+        <div class="hero-kicker"><span class="badge badge-open">À venir</span></div>
+        <h2 style="font-size:1.05rem;margin:0.4rem 0 0.2rem"><a href="/tournaments/<%= nextT._id %>"><%= nextT.name %></a></h2>
+        <p class="muted" style="margin:0 0 0.6rem"><%= nextT.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) %> · <%= (nextT.players || []).length %> inscrit<%= (nextT.players || []).length > 1 ? 's' : '' %></p>
+        <% if (isIn(nextT)) { %><span class="badge badge-live">✓ Inscrit·e</span><% } else if (currentUser) { %><a href="/tournaments/<%= nextT._id %>" class="btn btn-gold btn-small">S'inscrire</a><% } %>
+      </div>
+    <% } %>
+    <% if (currentUser) { %>
+      <div class="mini-stats">
+        <div class="mini-stat"><b>🏆 <%= myCups %></b><span>coupes</span></div>
+        <div class="mini-stat"><b><%= played %></b><span>tournois joués</span></div>
+        <div class="mini-stat"><b><%= done.length %></b><span>tournois terminés</span></div>
+      </div>
+      <div class="quick-links">
+        <a href="/players/<%= currentUser.id %>" class="btn btn-ghost btn-small">👤 Ma page</a>
+        <a href="/decks" class="btn btn-ghost btn-small">🃏 Mes decks</a>
+        <a href="/free-play/new" class="btn btn-ghost btn-small">🎲 Match free play</a>
+      </div>
+    <% } else { %>
+      <div class="card" style="margin:0">
+        <h2 style="font-size:1.05rem">Rejoins les tournois du midi</h2>
+        <p class="muted">Crée ton compte, colle ta decklist, inscris-toi : les pairings, le timer et le classement sont gérés ici.</p>
+        <a href="/register" class="btn btn-gold">Créer un compte</a>
+      </div>
+    <% } %>
+  </aside>
+</div>
 <% } %>
 
-<div class="event-list">
-<% for (const t of tournaments) { %>
-  <a href="/tournaments/<%= t._id %>" class="event-card">
+<% if (tournaments.length === 0) { %>
+  <div class="empty">
+    <span class="empty-icon">🏆</span>
+    <strong>Aucun tournoi pour le moment</strong>
+    <p><% if (currentUser) { %>Lance le premier : 2 h, rondes de 50 min, Bo3 — les collègues s'inscrivent avec leur deck.<% } else { %>Crée un compte pour en organiser un.<% } %></p>
+    <% if (currentUser) { %><a href="/tournaments/new" class="btn btn-gold">+ Nouveau tournoi</a><% } %>
+  </div>
+<% } %>
+
+<%
+const renderCard = (t) => { %>
+  <a href="/tournaments/<%= t._id %>" class="event-card <%= t.status === 'terminé' ? 'event-done' : '' %>">
+    <% if (isIn(t)) { %><span class="event-me" title="Tu participes"></span><% } %>
     <div class="event-date">
       <span class="day"><%= t.date.toLocaleDateString('fr-FR', { day: '2-digit' }) %></span>
       <span class="month"><%= t.date.toLocaleDateString('fr-FR', { month: 'short' }) %></span>
     </div>
     <div class="event-info">
       <h2><%= t.name %></h2>
-      <p class="muted">
-        <%= t.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) %>
-        · <%= Math.floor(t.durationMinutes / 60) %>h<%= t.durationMinutes % 60 ? String(t.durationMinutes % 60).padStart(2, '0') : '' %>
-        · rondes de <%= t.roundLength %> min
-        · organisé par <%= t.organizerName %>
-      </p>
-      <% if (t.winner) { %><p class="winner-line">🏆 <%= t.winner.username %> — <%= t.winner.deckName %></p><% } %>
+      <p class="muted"><%= t.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) %> · organisé par <%= t.organizerName %></p>
+      <% if (t.winner) { %><p class="winner-line">🏆 <strong><%= t.winner.username %></strong> — <%= t.winner.deckName %></p><% } %>
+      <div class="event-tags">
+        <span class="tag">⏱ <%= fmtDur(t.durationMinutes) %></span>
+        <span class="tag">🕐 <%= t.roundLength %> min / ronde</span>
+        <span class="tag">⚔️ Bo<%= t.bestOf || 1 %></span>
+        <% if (t.rounds && t.rounds.length) { %><span class="tag"><%= t.rounds.length %> ronde<%= t.rounds.length > 1 ? 's' : '' %></span><% } %>
+        <% if (isIn(t)) { %><span class="tag tag-gold">✓ inscrit·e</span><% } %>
+      </div>
     </div>
     <div class="event-side">
       <span class="badge badge-<%= t.status === 'inscriptions' ? 'open' : t.status === 'en_cours' ? 'live' : 'done' %>">
-        <%= t.status === 'inscriptions' ? 'Inscriptions ouvertes' : t.status === 'en_cours' ? '● En cours' : t.autoClosed ? 'Clôturé auto' : 'Terminé' %>
+        <%= t.status === 'inscriptions' ? 'Inscriptions ouvertes' : t.status === 'en_cours' ? 'En cours' : t.autoClosed ? 'Clôturé auto' : 'Terminé' %>
       </span>
-      <span class="muted"><%= (t.players || []).length %> joueur<%= (t.players || []).length > 1 ? 's' : '' %></span>
+      <span class="muted"><span class="avatar-stack"><% for (const p of (t.players || []).slice(0, 4)) { %><span class="avatar" title="<%= p.username %>"><%= p.username.charAt(0) %></span><% } %></span> <%= (t.players || []).length %> joueur<%= (t.players || []).length > 1 ? 's' : '' %></span>
     </div>
   </a>
+<% }; %>
+
+<% const active = [...live, ...upcoming]; %>
+<% if (active.length) { %>
+  <div class="section-title"><h2>En cours & à venir</h2><span class="muted"><%= active.length %></span></div>
+  <div class="event-list"><% for (const t of active) renderCard(t); %></div>
 <% } %>
-</div>
+<% if (done.length) { %>
+  <div class="section-title"><h2>Terminés</h2><a href="/stats" class="muted">Stats & palmarès →</a></div>
+  <div class="event-list"><% for (const t of done) renderCard(t); %></div>
+<% } %>
 
 <%- include('partials/foot') %>

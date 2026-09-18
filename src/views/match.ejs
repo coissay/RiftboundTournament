@@ -1,9 +1,15 @@
 <%- include('partials/head', { title: `Table ${match.table} — ${tournament.name}` }) %>
+<% const initial = (s) => (s || '?').charAt(0); const isLiveRound = tournament.status === 'en_cours' && round.number === tournament.rounds.length; %>
 
-<p><a href="/tournaments/<%= tournament._id %>" class="muted">← <%= tournament.name %></a></p>
+<div class="match-topline">
+  <p class="muted"><a href="/">Tournois</a> › <a href="/tournaments/<%= tournament._id %>"><%= tournament.name %></a> › Ronde <%= round.number %> · Table <%= match.table %></p>
+  <% if (isLiveRound) { %>
+    <span class="match-timer-pill" data-started="<%= round.startedAt.getTime() %>" data-length="<%= tournament.roundLength %>"><span class="muted" style="font-weight:500">⏱ Ronde <%= round.number %></span><span class="timer">--:--</span></span>
+  <% } %>
+</div>
 
 <div class="card match-card">
-  <p class="muted match-meta">Ronde <%= round.number %> · Table <%= match.table %> · Bo<%= tournament.bestOf || 1 %></p>
+  <p class="muted match-meta">Table <%= match.table %> · Bo<%= tournament.bestOf || 1 %> · <%= mySide ? (mySide === 'p1' ? 'tu es à gauche' : 'tu es à droite') : 'ronde ' + round.number %></p>
 
   <% const g = match.games || { p1: 0, p2: 0, draws: 0 }; %>
   <% const bestOf = tournament.bestOf || 1; %>
@@ -13,17 +19,19 @@
 
   <div class="versus">
     <div class="versus-side <%= match.result === 'p1' && decided ? 'versus-winner' : '' %>">
-      <span class="versus-name"><%= match.p1.username %></span>
+      <span class="avatar"><%= initial(match.p1.username) %></span>
+      <span class="versus-name"><%= match.p1.username %><%= mySide === 'p1' ? ' (moi)' : '' %></span>
       <span class="muted">(<%= recordOf[String(match.p1.userId)] || '0-0-0' %>)</span>
       <span class="muted deck-tag"><%= match.p1.deckName || 'deck non renseigné' %></span>
     </div>
     <div class="versus-center">
       <div class="versus-score"><%= g.p1 %> — <%= g.p2 %></div>
       <% if (g.draws) { %><div class="muted"><%= g.draws %> manche<%= g.draws > 1 ? 's' : '' %> nulle<%= g.draws > 1 ? 's' : '' %></div><% } %>
-      <div class="versus-vs">VS</div>
+      <div class="versus-vs"><%= decided ? 'FINAL' : played ? 'MANCHE ' + (played + 1) : 'VS' %></div>
     </div>
     <div class="versus-side <%= match.result === 'p2' && decided ? 'versus-winner' : '' %>">
-      <span class="versus-name"><%= match.p2.username %></span>
+      <span class="avatar"><%= initial(match.p2.username) %></span>
+      <span class="versus-name"><%= match.p2.username %><%= mySide === 'p2' ? ' (moi)' : '' %></span>
       <span class="muted">(<%= recordOf[String(match.p2.userId)] || '0-0-0' %>)</span>
       <span class="muted deck-tag"><%= match.p2.deckName || 'deck non renseigné' %></span>
     </div>
@@ -38,7 +46,7 @@
           <% } else { %><span class="result-chip win">Victoire <%= r === 'p1' ? match.p1.username : match.p2.username %></span><% } %>
         </div>
           <div class="manche-side">
-            <% if (!sidingGames.includes(n)) { %><span class="muted">🔁 deck inscrit des deux côtés</span>
+            <% if (!sidingGames.includes(n)) { %><span class="muted">decks inscrits des deux côtés</span>
             <% } else { for (const side of ['p1', 'p2']) { const sd = siding[side].games[n]; %>
               <span class="manche-side-player"><span class="muted"><%= side === mySide ? 'Mon side' : match[side].username %> :</span>
                 <% if (!sd) { %><span class="muted">—</span>
@@ -54,6 +62,23 @@
   <% if (canReport && !decided) { %>
     <div class="manche-report">
       <p class="manche-title">Manche <%= played + 1 %> — qui l'emporte ?</p>
+      <% if (isLiveRound) { %><button type="button" class="btn btn-ghost btn-small table-mode-toggle" id="table-mode-toggle" title="Plein écran : timer géant et gros boutons, pour poser le téléphone entre les deux joueurs">⛶ Mode table</button><% } %>
+      <div class="report-buttons">
+        <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/games">
+          <input type="hidden" name="gameResult" value="p1">
+          <button class="btn btn-report btn-win-left"><span class="who"><%= match.p1.username %></span><span class="sub">gagne la manche</span></button>
+        </form>
+        <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/games">
+          <input type="hidden" name="gameResult" value="draw">
+          <button class="btn btn-report btn-draw-mid"><span class="who">Nul</span><span class="sub">égalité / temps</span></button>
+        </form>
+        <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/games">
+          <input type="hidden" name="gameResult" value="p2">
+          <button class="btn btn-report btn-win-right"><span class="who"><%= match.p2.username %></span><span class="sub">gagne la manche</span></button>
+        </form>
+      </div>
+      <p class="muted report-hint">Première à <%= need %> manche<%= need > 1 ? 's' : '' %> gagnée<%= need > 1 ? 's' : '' %>. Temps écoulé ? Laisse le score en l'état : il compte tel quel.</p>
+
       <% const cur = played + 1; const curSidable = sidingGames.includes(cur); %>
       <% if (curSidable) { %>
         <% const oppS = mySide ? (mySide === 'p1' ? 'p2' : 'p1') : null; %>
@@ -62,11 +87,12 @@
           <% let prev = null; for (let k = cur - 1; k >= sidingGames[0] && !prev; k--) prev = mySiding.games[k] || null; %>
           <details class="siding-panel siding-panel-current siding-current" id="siding-form-current">
             <summary>
-              <span class="siding-panel-title">🔁 Mon side pour cette manche</span>
+              <span class="siding-panel-title">🔁 Mon side pour la manche <%= cur %></span>
               <span class="siding-panel-summary">
                 <% if (mine) { %><%- include('partials/siding-chips', { sd: mine, sdk: null, n: cur, cardImage, thumb, inline: true }) %>
-                <% } else { %><span class="muted">deck inscrit (aucun échange) — déplier pour noter</span><% } %>
+                <% } else { %><span class="muted">optionnel — aucun échange noté</span><% } %>
               </span>
+              <span class="badge <%= mine ? 'badge-live' : 'badge-done' %>"><%= mine ? 'noté' : 'à noter' %></span>
               <span class="muted siding-current-opp"><%= oppLine(oppS) %></span>
             </summary>
             <div class="siding-panel-body">
@@ -86,29 +112,14 @@
           <div class="manche-side manche-side-current"><span class="muted">🔁 <%= ['p1', 'p2'].map(oppLine).join(' · ') %></span></div>
         <% } %>
       <% } %>
-      <div class="report-buttons">
-        <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/games">
-          <input type="hidden" name="gameResult" value="p1">
-          <button class="btn btn-report btn-win-left"><%= match.p1.username %><span>Victoire</span></button>
-        </form>
-        <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/games">
-          <input type="hidden" name="gameResult" value="draw">
-          <button class="btn btn-report btn-draw-mid">Nul<span>Égalité</span></button>
-        </form>
-        <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/games">
-          <input type="hidden" name="gameResult" value="p2">
-          <button class="btn btn-report btn-win-right"><%= match.p2.username %><span>Victoire</span></button>
-        </form>
-      </div>
-      <p class="muted">Première à <%= need %> manche<%= need > 1 ? 's' : '' %> gagnée<%= need > 1 ? 's' : '' %>. Si le temps est écoulé, laisse le score en l'état : il compte tel quel.</p>
     </div>
   <% } else if (decided) { %>
     <div class="cup-banner match-final">
       <% if (match.result === 'draw') { %>Match nul <%= g.p1 %>-<%= g.p2 %>
       <% } else { %>🎉 <strong><%= match.result === 'p1' ? match.p1.username : match.p2.username %></strong> remporte le match <%= match.result === 'p1' ? g.p1 + '-' + g.p2 : g.p2 + '-' + g.p1 %><% } %>
     </div>
-  <% } else if (!canReport && tournament.status === 'en_cours' && round.number === tournament.rounds.length) { %>
-    <p class="muted">Seuls les joueurs de la table ou l'organisateur peuvent saisir le résultat<%= currentUser ? '' : ' — connecte-toi' %>.</p>
+  <% } else if (!canReport && isLiveRound) { %>
+    <p class="muted" style="text-align:center">Seuls les joueurs de la table ou l'organisateur peuvent saisir le résultat<%= currentUser ? '' : ' — connecte-toi' %>.</p>
   <% } %>
 
   <% if (mySide && decided && tournament.status !== 'terminé') { %>
@@ -124,7 +135,7 @@
   <% if (canReport && played > 0) { %>
     <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/reset"
           class="reset-form" data-confirm="Effacer toutes les manches saisies pour ce match ?">
-      <button class="btn btn-ghost btn-small">↺ Réinitialiser la saisie</button>
+      <button class="btn btn-danger-text">↺ Réinitialiser la saisie</button>
     </form>
   <% } %>
 </div>
@@ -133,12 +144,10 @@
 <%- include('partials/siding-accordion', { recap: true }) %>
 <% } %>
 
-<% if (tournament.status === 'en_cours' && round.number === tournament.rounds.length) { %>
-  <div class="timer-bar" data-started="<%= round.startedAt.getTime() %>" data-length="<%= tournament.roundLength %>">
-    <span>Temps de ronde</span>
-    <span class="timer" id="round-timer">--:--</span>
-  </div>
-  <script src="/timer.js"></script>
+<% if (isLiveRound) { %>
+  <div id="live" hidden data-url="/tournaments/<%= tournament._id %>/state" data-sig="<%= liveSig %>"></div>
+  <script src="/live.js"></script>
+  <script src="/table-mode.js"></script>
 <% } %>
 
 <%- include('partials/foot') %>

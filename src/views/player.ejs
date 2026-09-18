@@ -1,24 +1,39 @@
 <%- include('partials/head', { title: player.username }) %>
+<% const initial = (s) => (s || '?').charAt(0); %>
 
-<div class="event-hero">
-  <div>
-    <h1>👤 <%= player.username %></h1>
-    <p class="muted"><%= tournamentCount %> tournoi<%= tournamentCount > 1 ? 's' : '' %> joué<%= tournamentCount > 1 ? 's' : '' %> · membre depuis le <%= player.createdAt.toLocaleDateString('fr-FR') %></p>
+<!-- ===== En-tête profil ===== -->
+<header class="profile-hero">
+  <span class="avatar avatar-lg"><%= initial(player.username) %></span>
+  <div class="profile-body">
+    <h1><%= player.username %><% if (player.guest) { %> <span class="badge badge-guest">invité·e</span><% } %></h1>
+    <p class="muted" style="margin:0.2rem 0 0"><%= tournamentCount %> tournoi<%= tournamentCount > 1 ? 's' : '' %> joué<%= tournamentCount > 1 ? 's' : '' %> · membre depuis le <%= player.createdAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) %></p>
+    <div class="profile-badges">
+      <% if (cups.length) { %><span class="badge badge-open">🏆 <%= cups.length %> coupe<%= cups.length > 1 ? 's' : '' %></span><% } %>
+      <span class="badge badge-done"><%= summary.wins %>-<%= summary.draws %>-<%= summary.losses %> en tournoi</span>
+      <% if (freePlay.summary) { %><span class="badge badge-done">🎲 <%= freePlay.summary.wins %>-<%= freePlay.summary.draws %>-<%= freePlay.summary.losses %> en free play</span><% } %>
+      <% if (locatorInfo) { %><span class="badge badge-info">🌍 locator lié</span><% } %>
+    </div>
   </div>
-</div>
+  <% if (isMe) { %>
+    <div class="profile-actions">
+      <a href="/decks" class="btn btn-ghost btn-small">🃏 Mes decks</a>
+      <a href="/free-play/new" class="btn btn-ghost btn-small">🎲 Nouveau match</a>
+    </div>
+  <% } %>
+</header>
 
 <% if (player.guest) { %>
   <div class="notice-banner">👋 Joueur·se invité·e : ajouté·e à un tournoi par un organisateur, sans compte pour l'instant. L'historique ci-dessous sera rattaché à son compte dès qu'il/elle l'aura créé via son lien d'invitation.</div>
 <% } %>
 
 <% if (isMe && missingDeck.length > 0) { %>
-  <div class="card">
-    <h2>🃏 Decks à renseigner</h2>
+  <div class="card" style="border-color: rgba(212,169,65,0.5)">
+    <div class="card-head"><h2>🃏 Decks à renseigner <span class="count">(<%= missingDeck.length %>)</span></h2></div>
     <p class="muted">Tu as été inscrit·e à ces tournois sans deck. Indique celui que tu as joué : la version en vigueur à la date du tournoi sera retenue pour les stats.</p>
     <% if (myDecks.length === 0) { %>
-      <p><a href="/decks/new" class="btn btn-gold btn-small">Créer le deck que j'ai joué</a></p>
+      <div class="callout callout-gold" style="margin:0"><span class="callout-icon">✨</span><span>Commence par créer le deck que tu as joué.</span><span class="spacer"></span><a href="/decks/new" class="btn btn-gold btn-small">Créer un deck</a></div>
     <% } else { %>
-      <table class="table">
+      <table class="table table-dense">
         <thead><tr><th>Tournoi</th><th>Date</th><th>Deck joué</th></tr></thead>
         <tbody>
         <% for (const t of missingDeck) { %>
@@ -40,12 +55,12 @@
   </div>
 <% } %>
 
-<div class="stat-tiles">
+<div class="stat-tiles stat-tiles-5">
   <div class="stat-tile"><span class="stat-value">🏆 <%= cups.length %></span><span class="stat-label">Coupes</span></div>
   <div class="stat-tile"><span class="stat-value"><%= summary.wins %>-<%= summary.draws %>-<%= summary.losses %></span><span class="stat-label">Matchs V-N-D</span></div>
-  <div class="stat-tile"><span class="stat-value"><%= (summary.winRate * 100).toFixed(1) %>%</span><span class="stat-label">Win rate matchs</span></div>
+  <div class="stat-tile"><span class="stat-value"><%= (summary.winRate * 100).toFixed(0) %> %</span><span class="stat-label">Win rate matchs</span></div>
   <div class="stat-tile"><span class="stat-value"><%= summary.gameWins %>-<%= summary.gameDraws %>-<%= summary.gameLosses %></span><span class="stat-label">Manches V-N-D</span></div>
-  <div class="stat-tile"><span class="stat-value"><%= (summary.gameWinRate * 100).toFixed(1) %>%</span><span class="stat-label">GW%</span></div>
+  <div class="stat-tile"><span class="stat-value"><%= (summary.gameWinRate * 100).toFixed(0) %> %</span><span class="stat-label">GW%</span></div>
 </div>
 
 <% if (cups.length > 0) { %>
@@ -59,23 +74,107 @@
   </div>
 <% } %>
 
-<!-- Résultats officiels (locator UVS) -->
-<div class="card locator-card">
-  <div class="page-head">
-    <h2>🌍 Résultats officiels <span class="muted">(locator UVS)</span></h2>
-    <% if (isMe) { %>
-      <% if (locatorInfo) { %>
-        <div class="row-actions">
-          <form method="post" action="/locator/import" class="inline"><button class="btn btn-gold">Importer mes résultats</button></form>
-          <form method="post" action="/locator/disconnect" class="inline" data-confirm="Déconnecter le compte locator ? Les événements déjà importés sont conservés."><button class="btn btn-ghost">Déconnecter</button></form>
-        </div>
+<!-- Historique tournois : d'abord, c'est le cœur de la page -->
+<div class="card">
+  <div class="card-head"><h2>Historique des matchs <span class="count">(tournois internes · <%= history.length %>)</span></h2></div>
+  <% if (history.length === 0) { %>
+    <div class="empty"><span class="empty-icon">⚔️</span><strong>Aucun match joué pour l'instant</strong><p>Les matchs apparaissent ici dès la première ronde d'un tournoi.</p></div>
+  <% } else { %>
+  <div class="table-scroll">
+  <table class="table table-dense table-cards">
+    <thead><tr><th>Date</th><th>Tournoi</th><th class="num">Ronde</th><th>Mon deck</th><th>Adversaire</th><th class="num">Score</th><th>Résultat</th></tr></thead>
+    <tbody>
+    <% for (const h of history) { %>
+      <tr>
+        <td class="muted" data-label="Date"><%= h.date.toLocaleDateString('fr-FR') %></td>
+        <td data-label="Tournoi"><a href="/tournaments/<%= h.tournamentId %>"><%= h.tournamentName %></a></td>
+        <td class="num" data-label="Ronde"><%= h.round %></td>
+        <td class="muted" data-label="Mon deck"><%= h.myDeck || '—' %></td>
+        <td data-label="Adversaire">
+          <% if (h.bye) { %><em class="muted">BYE</em>
+          <% } else { %><span class="opp-cell"><a href="/players/<%= h.oppId %>"><%= h.oppName %></a> <span class="muted deck-tag"><%= h.oppDeck %></span></span><% } %>
+        </td>
+        <td class="num" data-label="Score"><%= h.bye ? '—' : h.score %></td>
+        <td data-label="Résultat">
+          <% if (h.outcome === 'win') { %><span class="result-chip win">Victoire</span>
+          <% } else if (h.outcome === 'loss') { %><span class="result-chip loss">Défaite</span>
+          <% } else if (h.outcome === 'draw') { %><span class="result-chip draw">Nul</span>
+          <% } else { %><span class="result-chip win">Bye ✓</span><% } %>
+        </td>
+      </tr>
+    <% } %>
+    </tbody>
+  </table>
+  </div>
+  <% } %>
+</div>
+
+<!-- Free play : section à part des tournois -->
+<div class="card">
+  <div class="card-head">
+    <h2>🎲 Free play <span class="count">(hors tournoi · <%= freePlay.history.length %>)</span></h2>
+    <a href="/free-play/stats" class="btn btn-ghost btn-small">Stats free play →</a>
+  </div>
+  <% if (freePlay.history.length === 0) { %>
+    <div class="callout" style="margin:0"><span class="callout-icon">🎲</span><span class="muted">Aucun match free play pour l'instant.</span><% if (isMe) { %><span class="spacer"></span><a href="/free-play/new" class="btn btn-ghost btn-small">Créer un match</a><% } %></div>
+  <% } else { %>
+    <% const fs = freePlay.summary; %>
+    <% if (fs) { %>
+    <div class="stat-tiles">
+      <div class="stat-tile"><span class="stat-value"><%= fs.wins %>-<%= fs.draws %>-<%= fs.losses %></span><span class="stat-label">Matchs V-N-D</span></div>
+      <div class="stat-tile"><span class="stat-value"><%= (fs.winRate * 100).toFixed(0) %> %</span><span class="stat-label">Win rate matchs</span></div>
+      <div class="stat-tile"><span class="stat-value"><%= fs.gameWins %>-<%= fs.gameDraws %>-<%= fs.gameLosses %></span><span class="stat-label">Manches V-N-D</span></div>
+      <% for (const [key, spec] of Object.entries(FORMATS)) { const f = freePlay.perFormat[key]; if (!f) continue; %>
+        <div class="stat-tile"><span class="stat-value"><%= f.wins + '-' + f.draws + '-' + f.losses %></span><span class="stat-label"><%= spec.label %></span></div>
       <% } %>
+    </div>
+    <% } %>
+    <div class="table-scroll">
+    <table class="table table-dense table-cards">
+      <thead><tr><th>Date</th><th>Format</th><th>Mon deck</th><th>Avec</th><th>Contre</th><th class="num">Score</th><th>Résultat</th></tr></thead>
+      <tbody>
+      <% for (const h of freePlay.history) { %>
+        <tr>
+          <td class="muted" data-label="Date"><a href="/free-play/<%= h.id %>"><%= h.date.toLocaleDateString('fr-FR') %></a></td>
+          <td data-label="Format"><span class="tag"><%= FORMATS[h.format] ? FORMATS[h.format].label : h.format %></span></td>
+          <td class="muted" data-label="Mon deck"><%= h.myDeck || '—' %></td>
+          <td data-label="Avec"><% if (h.teammates.length === 0) { %><span class="muted">—</span><% } else { h.teammates.forEach((t, i) => { %><% if (i > 0) { %>, <% } %><a href="/players/<%= t.userId %>"><%= t.username %></a><% }) } %></td>
+          <td data-label="Contre"><% h.opponents.forEach((o, i) => { %><% if (i > 0) { %> · <% } %><% o.players.forEach((p, j) => { %><% if (j > 0) { %> &amp; <% } %><a href="/players/<%= p.userId %>"><%= p.username %></a><% if (p.deckName) { %> <span class="muted">(<%= p.deckName %>)</span><% } %><% }) %><% }) %></td>
+          <td class="num" data-label="Score"><%= h.score || '—' %></td>
+          <td data-label="Résultat">
+            <% if (h.outcome === 'win') { %><span class="result-chip win">Victoire</span>
+            <% } else if (h.outcome === 'loss') { %><span class="result-chip loss">Défaite</span>
+            <% } else if (h.outcome === 'draw') { %><span class="result-chip draw">Nul</span>
+            <% } else { %><span class="badge badge-live">En cours</span><% } %>
+          </td>
+        </tr>
+      <% } %>
+      </tbody>
+    </table>
+    </div>
+  <% } %>
+</div>
+
+<!-- Résultats officiels (locator UVS) : compact tant qu'il n'y a rien -->
+<% if (isMe && !locatorInfo && externalEvents.length === 0) { %>
+  <div class="callout">
+    <span class="callout-icon">🌍</span>
+    <span class="muted">Tu joues aussi en boutique ? Lie ton compte <a href="https://locator.riftbound.uvsgames.com/" target="_blank" rel="noopener">locator UVS</a> pour importer tes résultats officiels et le deck joué.</span>
+    <span class="spacer"></span>
+    <a href="/locator" class="btn btn-ghost btn-small">Lier le locator</a>
+  </div>
+<% } else if (isMe || externalEvents.length > 0) { %>
+<div class="card locator-card">
+  <div class="card-head">
+    <h2>🌍 Résultats officiels <span class="count">(locator UVS)</span></h2>
+    <% if (isMe && locatorInfo) { %>
+      <div class="row-actions" style="margin:0">
+        <form method="post" action="/locator/import" class="inline"><button class="btn btn-gold btn-small">Importer mes résultats</button></form>
+        <form method="post" action="/locator/disconnect" class="inline" data-confirm="Déconnecter le compte locator ? Les événements déjà importés sont conservés."><button class="btn btn-ghost btn-small">Déconnecter</button></form>
+      </div>
     <% } %>
   </div>
-
-  <% if (isMe && !locatorInfo) { %>
-    <p class="muted">Lie ton compte <a href="https://locator.riftbound.uvsgames.com/" target="_blank" rel="noopener">locator UVS</a> pour importer automatiquement tes résultats d'événements officiels et le deck joué. <a href="/locator" class="btn btn-gold btn-small">Lier avec le locator</a></p>
-  <% } else if (isMe && locatorInfo) { %>
+  <% if (isMe && locatorInfo) { %>
     <p class="muted">Connecté en tant que <%= locatorInfo.email %><% if (locatorInfo.lastImportAt) { %> · dernier import le <%= locatorInfo.lastImportAt.toLocaleString('fr-FR') %><% } else { %> · aucun import pour l'instant<% } %>.</p>
   <% } %>
 
@@ -83,15 +182,15 @@
     <div class="stat-tiles">
       <div class="stat-tile"><span class="stat-value"><%= external.total.events %></span><span class="stat-label">Événements</span></div>
       <div class="stat-tile"><span class="stat-value"><%= external.total.wins %>-<%= external.total.draws %>-<%= external.total.losses %></span><span class="stat-label">Matchs V-N-D</span></div>
-      <div class="stat-tile"><span class="stat-value"><%= (external.total.winRate * 100).toFixed(1) %>%</span><span class="stat-label">Win rate</span></div>
+      <div class="stat-tile"><span class="stat-value"><%= (external.total.winRate * 100).toFixed(0) %> %</span><span class="stat-label">Win rate</span></div>
       <div class="stat-tile"><span class="stat-value"><%= external.total.gameWins %>-<%= external.total.gameLosses %></span><span class="stat-label">Manches V-D</span></div>
       <div class="stat-tile"><span class="stat-value">🥇 <%= external.total.top %></span><span class="stat-label">Top 3</span></div>
     </div>
 
     <h3>Par deck joué</h3>
     <div class="table-scroll">
-    <table class="table">
-      <thead><tr><th>Deck</th><th>Événements</th><th>V-N-D</th><th>Win rate</th></tr></thead>
+    <table class="table table-dense">
+      <thead><tr><th>Deck</th><th class="num">Événements</th><th class="num">V-N-D</th><th>Win rate</th></tr></thead>
       <tbody>
       <% for (const d of external.decks) { %>
         <tr>
@@ -100,9 +199,9 @@
             <% if (d.deckId) { %><a href="/decks/<%= d.deckId %>"><%= d.name %></a><% } else { %><%= d.name %><% } %>
             <% if (d.legend) { %><span class="muted deck-tag"><%= d.legend %></span><% } %>
           </td>
-          <td><%= d.events %></td>
-          <td><%= d.wins %>-<%= d.draws %>-<%= d.losses %></td>
-          <td><span class="rate-bar"><span class="rate-fill" style="width: <%= (d.winRate * 100).toFixed(0) %>%"></span></span><%= (d.winRate * 100).toFixed(1) %>%</td>
+          <td class="num"><%= d.events %></td>
+          <td class="num"><%= d.wins %>-<%= d.draws %>-<%= d.losses %></td>
+          <td><span class="rate-cell"><span class="rate-bar"><span class="rate-fill" style="width: <%= (d.winRate * 100).toFixed(0) %>%"></span></span><%= (d.winRate * 100).toFixed(0) %> %</span></td>
         </tr>
       <% } %>
       </tbody>
@@ -134,14 +233,14 @@
               <% if (ev.deck && (ev.deck.name || ev.deck.definingCard)) { %><span class="muted">Locator : <%= ev.deck.name || '' %><%= ev.deck.definingCard ? ' (' + ev.deck.definingCard.name + ')' : '' %></span><% } %>
             </form>
           <% } %>
-          <table class="table">
-            <thead><tr><th>Ronde</th><th>Adversaire</th><th>Score</th><th>Résultat</th></tr></thead>
+          <table class="table table-dense">
+            <thead><tr><th>Ronde</th><th>Adversaire</th><th class="num">Score</th><th>Résultat</th></tr></thead>
             <tbody>
             <% for (const m of ev.matches) { %>
               <tr>
                 <td><%= m.round %></td>
                 <td><%= m.outcome === 'bye' ? '—' : m.oppName || '?' %></td>
-                <td><%= m.outcome === 'bye' ? '—' : m.gamesWon + '-' + m.gamesLost %></td>
+                <td class="num"><%= m.outcome === 'bye' ? '—' : m.gamesWon + '-' + m.gamesLost %></td>
                 <td>
                   <% if (m.outcome === 'win') { %><span class="result-chip win">Victoire</span>
                   <% } else if (m.outcome === 'loss') { %><span class="result-chip loss">Défaite</span>
@@ -157,89 +256,8 @@
       </details>
     <% } %>
     </div>
-  <% } else if (!isMe) { %>
-    <p class="muted">Aucun résultat officiel importé.</p>
   <% } %>
 </div>
-
-<!-- Free play : section à part des tournois -->
-<div class="card">
-  <div class="page-head">
-    <h2>🎲 Free play <span class="muted">(hors tournoi)</span></h2>
-    <a href="/free-play/stats" class="muted">Stats free play →</a>
-  </div>
-  <% if (freePlay.history.length === 0) { %>
-    <div class="empty">Aucun match free play pour l'instant.</div>
-  <% } else { %>
-    <% const fs = freePlay.summary; %>
-    <% if (fs) { %>
-    <div class="stat-tiles">
-      <div class="stat-tile"><span class="stat-value"><%= fs.wins %>-<%= fs.draws %>-<%= fs.losses %></span><span class="stat-label">Matchs V-N-D</span></div>
-      <div class="stat-tile"><span class="stat-value"><%= (fs.winRate * 100).toFixed(1) %>%</span><span class="stat-label">Win rate matchs</span></div>
-      <div class="stat-tile"><span class="stat-value"><%= fs.gameWins %>-<%= fs.gameDraws %>-<%= fs.gameLosses %></span><span class="stat-label">Manches V-N-D</span></div>
-      <% for (const [key, spec] of Object.entries(FORMATS)) { const f = freePlay.perFormat[key]; %>
-        <div class="stat-tile"><span class="stat-value"><%= f ? f.wins + '-' + f.draws + '-' + f.losses : '—' %></span><span class="stat-label"><%= spec.label %></span></div>
-      <% } %>
-    </div>
-    <% } %>
-    <div class="table-scroll">
-    <table class="table">
-      <thead><tr><th>Date</th><th>Format</th><th>Mon deck</th><th>Avec</th><th>Contre</th><th>Score</th><th>Résultat</th></tr></thead>
-      <tbody>
-      <% for (const h of freePlay.history) { %>
-        <tr>
-          <td class="muted"><a href="/free-play/<%= h.id %>"><%= h.date.toLocaleDateString('fr-FR') %></a></td>
-          <td><%= FORMATS[h.format] ? FORMATS[h.format].label : h.format %></td>
-          <td class="muted"><%= h.myDeck || '—' %></td>
-          <td><% if (h.teammates.length === 0) { %><span class="muted">—</span><% } else { h.teammates.forEach((t, i) => { %><% if (i > 0) { %>, <% } %><a href="/players/<%= t.userId %>"><%= t.username %></a><% }) } %></td>
-          <td><% h.opponents.forEach((o, i) => { %><% if (i > 0) { %> · <% } %><% o.players.forEach((p, j) => { %><% if (j > 0) { %> &amp; <% } %><a href="/players/<%= p.userId %>"><%= p.username %></a><% if (p.deckName) { %> <span class="muted">(<%= p.deckName %>)</span><% } %><% }) %><% }) %></td>
-          <td><%= h.score || '—' %></td>
-          <td>
-            <% if (h.outcome === 'win') { %><span class="result-chip win">Victoire</span>
-            <% } else if (h.outcome === 'loss') { %><span class="result-chip loss">Défaite</span>
-            <% } else if (h.outcome === 'draw') { %><span class="result-chip draw">Nul</span>
-            <% } else { %><span class="badge badge-live">● En cours</span><% } %>
-          </td>
-        </tr>
-      <% } %>
-      </tbody>
-    </table>
-    </div>
-  <% } %>
-</div>
-
-<div class="card">
-  <h2>Historique des matchs <span class="muted">(tournois internes)</span></h2>
-  <% if (history.length === 0) { %>
-    <div class="empty">Aucun match joué pour l'instant.</div>
-  <% } else { %>
-  <div class="table-scroll">
-  <table class="table">
-    <thead><tr><th>Date</th><th>Tournoi</th><th>Ronde</th><th>Mon deck</th><th>Adversaire</th><th>Score</th><th>Résultat</th></tr></thead>
-    <tbody>
-    <% for (const h of history) { %>
-      <tr>
-        <td class="muted"><%= h.date.toLocaleDateString('fr-FR') %></td>
-        <td><a href="/tournaments/<%= h.tournamentId %>"><%= h.tournamentName %></a></td>
-        <td><%= h.round %></td>
-        <td class="muted"><%= h.myDeck || '—' %></td>
-        <td>
-          <% if (h.bye) { %><em class="muted">BYE</em>
-          <% } else { %><a href="/players/<%= h.oppId %>"><%= h.oppName %></a> <span class="muted deck-tag"><%= h.oppDeck %></span><% } %>
-        </td>
-        <td><%= h.bye ? '—' : h.score %></td>
-        <td>
-          <% if (h.outcome === 'win') { %><span class="result-chip win">Victoire</span>
-          <% } else if (h.outcome === 'loss') { %><span class="result-chip loss">Défaite</span>
-          <% } else if (h.outcome === 'draw') { %><span class="result-chip draw">Nul</span>
-          <% } else { %><span class="result-chip win">Bye ✓</span><% } %>
-        </td>
-      </tr>
-    <% } %>
-    </tbody>
-  </table>
-  </div>
-  <% } %>
-</div>
+<% } %>
 
 <%- include('partials/foot') %>

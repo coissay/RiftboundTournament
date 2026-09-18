@@ -27,8 +27,10 @@
       deckSelect.appendChild(option(d.id, d.legend ? d.name + ' (' + d.legend + ')' : d.name, d.id === keepDeckId));
     }
     deckSelect.disabled = decks.length === 0;
-    if (decks.length === 0 && userId) {
-      deckSelect.appendChild(option('', 'aucun deck enregistré'));
+    if (!userId) {
+      deckSelect.firstChild.textContent = '— choisis d’abord le joueur —';
+    } else if (decks.length === 0) {
+      deckSelect.firstChild.textContent = '— ce joueur n’a aucun deck enregistré —';
     }
   }
 
@@ -87,4 +89,12 @@
 
   formatSelect.addEventListener('change', render);
   render();
+
+  // Date et heure préremplies à « maintenant » (heure locale du navigateur).
+  const dateInput = document.querySelector('input[name="date"]');
+  if (dateInput && !dateInput.value) {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    dateInput.value = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+  }
 })();

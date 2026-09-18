@@ -48,6 +48,16 @@ npm run dev                  # relance auto à chaque modif → http://localhost
 - **Pages joueur** (`/players/:id`, accessibles en cliquant un nom) : palmarès, win rate matchs/manches, et historique complet des matchs (tournoi, ronde, decks, score, résultat).
 - **Résultats officiels (locator UVS)** : page `/locator` pour lier son compte [locator.riftbound.uvsgames.com](https://locator.riftbound.uvsgames.com/) — soit email + mot de passe UVS (échangés contre un jeton, stocké chiffré ; le mot de passe n'est jamais conservé — les comptes « Sign in with Google » définissent d'abord un mot de passe via « Forgot your password? »), soit un cookie `sessionid` collé à la main. Le bouton « Importer mes résultats » récupère l'historique des événements officiels (rondes, adversaires, scores, deck joué) via l'API non documentée du locator (`api.riftbound.uvsgames.com`, celle qu'utilise le site), les stocke dans `external_events` et les affiche sur la page joueur avec bilan global, bilan par deck (rapprochement automatique avec les decks de l'outil par légende ou nom, corrigible à la main) et détail ronde par ronde.
 
+## Interface
+
+- **Mobile d'abord** : barre d'onglets fixe en bas (Tournois · Free play · Stats · Decks · Builder) et en-tête réduit sous 720 px ; tous les tableaux défilent horizontalement (première colonne figée, colonnes secondaires masquées), les historiques passent en cartes, cibles tactiles de 44 px.
+- **Accueil « ma prochaine étape »** : si un tournoi est en cours, carte avec ma table, mon adversaire, le timer de ronde et le bouton de saisie ; sinon le prochain tournoi et l'inscription. Mini-stats personnelles et raccourcis, liste scindée « En cours & à venir » / « Terminés ».
+- **Bannière « C'est à toi de saisir »** sur toutes les pages (sauf celles du tournoi concerné) tant qu'un résultat m'attend dans la ronde en cours, avec le timer et un lien direct vers la table.
+- **Page tournoi** : en-tête compact (statut, chips de méta, timer en tuile), barre « Ma table » pour le joueur, barre « Organisation » avec progression des résultats saisis pour l'organisateur, **pairings en cartes** (ma ligne surlignée, bouton « Saisir » contextuel, pastilles de manches colorées par côté). Le record affiché à côté de chaque joueur est celui **à l'entrée de la ronde**, pas le record final.
+- **Rafraîchissement automatique** : les pages tournoi et match interrogent l'état du tournoi toutes les 20 s (`/tournaments/:id/state`) et se rechargent quand une ronde est lancée, un résultat saisi ou le tournoi clôturé — jamais pendant qu'on remplit un champ.
+- **Mode table** sur la page match (bouton « ⛶ Mode table ») : plein écran, timer géant, gros boutons de score, pour poser le téléphone entre les deux joueurs. Sortie par ✕ ou Échap ; le mode est conservé au rechargement.
+- **Page joueur** avec en-tête profil (avatar, badges), **fiche deck en bannière** (art de la légende en fond, stats agrégées, timeline des versions), liste des decks hiérarchisée, états vides illustrés, page 404, boîte de confirmation stylisée, flash fermable, focus clavier visible. Icônes SVG monochromes pour la navigation (`partials/icon.ejs`), échelle typographique en variables CSS (`--fs-*`).
+
 ## Stack
 
 - Node.js + Express, vues EJS rendues serveur
@@ -72,7 +82,7 @@ src/
   locator.js       # client API locator UVS (login, historique) + chiffrement du jeton + catalogue allégé pour le client
   routes/          # auth, decks, deckbuilder (/deckbuilder, /api/cards, /api/decklist/resolve), tournaments, freeplay, stats, players
   views/           # pages EJS (deckbuilder.ejs pour le deckbuilder, freeplay/ pour le free play)
-  public/          # style.css, timer.js, deck-preview.js, freeplay-form.js, deckbuilder.js + deckbuilder.css (galerie/deck côté client)
+  public/          # style.css, timer.js, live.js (rafraîchissement auto), table-mode.js, confirm.js, card-popover.js, deck-preview.js, freeplay-form.js, deckbuilder.js + deckbuilder.css
 ```
 
 ## Remettre la base à zéro

@@ -55,7 +55,8 @@ function emptyRecord(player) {
 }
 
 // Calcule le classement à partir des rondes jouées.
-export function computeStandings(tournament) {
+// `beforeRound` : ne compte que les rondes strictement antérieures (record « à l'entrée » de la ronde N).
+export function computeStandings(tournament, { beforeRound = null } = {}) {
   const records = new Map();
   for (const p of tournament.players || []) {
     records.set(String(p.userId), emptyRecord(p));
@@ -63,6 +64,7 @@ export function computeStandings(tournament) {
 
   const bestOf = tournament.bestOf || 1;
   for (const round of tournament.rounds || []) {
+    if (beforeRound !== null && round.number >= beforeRound) continue;
     for (const match of round.matches || []) {
       const p1 = records.get(String(match.p1.userId));
       if (match.bye) {

@@ -1,25 +1,40 @@
 <%- include('partials/head', { title: tournament.name }) %>
+<%
+const me = currentUser ? currentUser.id : null;
+const lastRound = tournament.rounds[tournament.rounds.length - 1];
+const fmtDur = (m) => Math.floor(m / 60) + 'h' + (m % 60 ? String(m % 60).padStart(2, '0') : '');
+const statusBadge = tournament.status === 'inscriptions' ? 'open' : tournament.status === 'en_cours' ? 'live' : 'done';
+const statusLabel = tournament.status === 'inscriptions' ? 'Inscriptions ouvertes' : tournament.status === 'en_cours' ? 'En cours' : 'Terminé';
+const myMatch = me && lastRound ? lastRound.matches.find((m) => String(m.p1.userId) === me || (m.p2 && String(m.p2.userId) === me)) : null;
+const pendingCount = lastRound ? lastRound.matches.filter((m) => !m.result).length : 0;
+const totalTables = lastRound ? lastRound.matches.filter((m) => !m.bye).length : 0;
+const initial = (s) => (s || '?').charAt(0);
+%>
 
-<div class="event-hero">
-  <div>
-    <h1><%= tournament.name %></h1>
-    <p class="muted">
-      <%= tournament.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) %>
-      à <%= tournament.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) %>
-      · durée <%= Math.floor(tournament.durationMinutes / 60) %>h<%= tournament.durationMinutes % 60 ? String(tournament.durationMinutes % 60).padStart(2, '0') : '' %>
-      · rondes de <%= tournament.roundLength %> min
-      · Bo<%= tournament.bestOf || 1 %>
-      · organisé par <strong><%= tournament.organizerName %></strong>
-    </p>
-    <% if (tournament.description) { %><p><%= tournament.description %></p><% } %>
+<!-- ===== En-tête compact ===== -->
+<p class="t-breadcrumb muted"><a href="/">Tournois</a> › <%= tournament.name %></p>
+<header class="t-hero">
+  <div class="t-hero-main">
+    <div class="t-hero-top">
+      <span class="badge badge-<%= statusBadge %>"><%= statusLabel %></span>
+      <h1><%= tournament.name %></h1>
+    </div>
+    <ul class="t-meta">
+      <li>📅 <b><%= tournament.date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) %></b> <%= tournament.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) %></li>
+      <li>⏱ <%= fmtDur(tournament.durationMinutes) %> · rondes de <b><%= tournament.roundLength %> min</b></li>
+      <li>⚔️ <b>Bo<%= tournament.bestOf || 1 %></b></li>
+      <li>👥 <b><%= tournament.players.filter(p => !p.dropped).length %></b> joueurs · ~<%= plannedRounds %> ronde<%= plannedRounds > 1 ? 's' : '' %></li>
+      <li>👤 organisé par <b><%= tournament.organizerName %></b></li>
+    </ul>
+    <% if (tournament.description) { %><p class="t-desc"><%= tournament.description %></p><% } %>
   </div>
-  <div class="event-hero-side">
-    <span class="badge badge-<%= tournament.status === 'inscriptions' ? 'open' : tournament.status === 'en_cours' ? 'live' : 'done' %>">
-      <%= tournament.status === 'inscriptions' ? 'Inscriptions ouvertes' : tournament.status === 'en_cours' ? '● En cours' : 'Terminé' %>
-    </span>
-    <span class="muted"><%= tournament.players.filter(p => !p.dropped).length %> joueurs · ~<%= plannedRounds %> ronde<%= plannedRounds > 1 ? 's' : '' %> prévues</span>
-  </div>
-</div>
+  <% if (tournament.status === 'en_cours' && lastRound) { %>
+    <div class="t-timer" data-started="<%= lastRound.startedAt.getTime() %>" data-length="<%= tournament.roundLength %>">
+      <span class="label">Ronde <%= lastRound.number %> · temps restant</span>
+      <span class="timer">--:--</span>
+    </div>
+  <% } %>
+</header>
 
 <% if (tournament.winner) { %>
   <div class="cup-banner">🏆 <strong><%= tournament.winner.username %></strong> remporte la coupe avec « <%= tournament.winner.deckName %> » !</div>
@@ -29,16 +44,23 @@
   <div class="notice-banner">
     ⏸ Clôturé automatiquement le <%= tournament.finishedAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) %>
     après <%= autoCloseDays %> jours sans activité — aucune coupe attribuée.
-    <% if (organizer) { %><span class="muted">Tu peux le rouvrir depuis le bloc « Organisation ».</span>
+    <% if (organizer) { %><span class="muted">Tu peux le rouvrir depuis la barre « Organisation ».</span>
     <% } else { %><span class="muted">L'organisateur ou un admin peut le rouvrir.</span><% } %>
   </div>
 <% } %>
 
-<% const lastRound = tournament.rounds[tournament.rounds.length - 1]; %>
-<% if (tournament.status === 'en_cours' && lastRound) { %>
-  <div class="timer-bar" data-started="<%= lastRound.startedAt.getTime() %>" data-length="<%= tournament.roundLength %>">
-    <span>Ronde <%= lastRound.number %></span>
-    <span class="timer" id="round-timer">--:--</span>
+<!-- ===== Ma prochaine action (joueur) ===== -->
+<% if (me && tournament.status === 'en_cours' && lastRound && myMatch) { const opp = String(myMatch.p1.userId) === me ? myMatch.p2 : myMatch.p1; %>
+  <div class="action-bar action-bar-me">
+    <% if (myMatch.bye) { %>
+      <div class="my-match"><div class="my-match-table"><b>—</b><span>bye</span></div><div class="my-match-body"><strong>Tu as le bye cette ronde</strong><div class="muted">victoire automatique <%= Math.ceil((tournament.bestOf || 1) / 2) %>-0</div></div></div>
+    <% } else { %>
+      <div class="my-match">
+        <div class="my-match-table"><b><%= myMatch.table %></b><span>ma table</span></div>
+        <div class="my-match-body"><strong>Contre <%= opp.username %></strong><div class="muted"><%= opp.deckName || 'deck non renseigné' %> · <%= myMatch.result ? 'résultat saisi ✓' : 'résultat à saisir' %></div></div>
+      </div>
+      <a href="/tournaments/<%= tournament._id %>/rounds/<%= lastRound.number %>/tables/<%= myMatch.table %>" class="btn <%= myMatch.result ? 'btn-ghost' : 'btn-gold btn-primary-lg' %>"><%= myMatch.result ? 'Voir / modifier' : '⚔️ Saisir le résultat' %></a>
+    <% } %>
   </div>
 <% } %>
 
@@ -57,8 +79,9 @@
         <button class="btn btn-gold"><%= registered ? 'Changer de deck' : "S'inscrire" %></button>
       </form>
       <% if (registered) { %>
+        <span class="badge badge-live">✓ Inscrit·e</span>
         <form method="post" action="/tournaments/<%= tournament._id %>/leave" class="inline">
-          <button class="btn btn-ghost">Se désinscrire</button>
+          <button class="btn btn-ghost btn-small">Se désinscrire</button>
         </form>
       <% } %>
     <% } %>
@@ -67,9 +90,10 @@
 
 <!-- Inscrit sans deck (ajouté par l'organisateur) : renseigner le deck joué -->
 <% if (currentUser && myDeckMissing && tournament.status !== 'inscriptions') { %>
-  <div class="card join-card">
+  <div class="callout callout-gold">
+    <span class="callout-icon">🃏</span>
     <% if (myDecks.length === 0) { %>
-      <p>Tu es inscrit·e sans deck : <a href="/decks/new">crée le deck que tu as joué</a> pour le renseigner ici.</p>
+      <span>Tu es inscrit·e sans deck : <a href="/decks/new">crée le deck que tu as joué</a> pour le renseigner ici.</span>
     <% } else { %>
       <form method="post" action="/tournaments/<%= tournament._id %>/my-deck" class="join-form">
         <label>Deck que j'ai joué :
@@ -84,27 +108,25 @@
 
 <!-- État de la ronde pour les non-organisateurs -->
 <% if (!organizer && tournament.status === 'en_cours' && lastRound) { %>
-  <% const pendingTables = lastRound.matches.filter(m => !m.result).map(m => m.table); %>
-  <div class="card organizer-card">
-    <% if (pendingTables.length > 0) { %>
-      <span class="muted">⏳ En attente des résultats de la table<%= pendingTables.length > 1 ? 's' : '' %> <%= pendingTables.join(', ') %>.</span>
+  <div class="callout">
+    <% if (pendingCount > 0) { %>
+      <span class="callout-icon">⏳</span><span class="muted"><%= totalTables - pendingCount %>/<%= totalTables %> résultats saisis — en attente de la table<%= pendingCount > 1 ? 's' : '' %> <%= lastRound.matches.filter(m => !m.result).map(m => m.table).join(', ') %>.</span>
     <% } else { %>
-      <span class="muted">✅ Tous les résultats de la ronde <%= lastRound.number %> sont saisis — c'est à l'organisateur (<strong><%= tournament.organizerName %></strong>) de lancer la ronde suivante ou de clôturer.</span>
+      <span class="callout-icon">✅</span><span class="muted">Tous les résultats de la ronde <%= lastRound.number %> sont saisis — <strong><%= tournament.organizerName %></strong> peut lancer la ronde suivante ou clôturer.</span>
     <% } %>
   </div>
 <% } %>
 
-<!-- Contrôles organisateur -->
+<!-- ===== Barre d'actions organisateur ===== -->
 <% if (organizer) { %>
-  <div class="card organizer-card">
-    <strong>Organisation :</strong>
+  <div class="action-bar">
+    <span class="action-label">Organisation</span>
     <% if (tournament.status === 'inscriptions') { %>
       <form method="post" action="/tournaments/<%= tournament._id %>/start" class="inline">
-        <button class="btn btn-gold" <%= tournament.players.length < 2 ? 'disabled' : '' %>>▶ Lancer le tournoi (ronde 1)</button>
+        <button class="btn btn-gold" <%= tournament.players.length < 2 ? 'disabled' : '' %>>▶ Lancer la ronde 1</button>
       </form>
-      <% if (tournament.players.length < 2) { %><span class="muted">— il faut au moins 2 inscrits</span><% } %>
-      <details class="guest-add">
-        <summary class="btn btn-ghost">+ Ajouter un joueur sans compte</summary>
+      <details class="guest-add" style="width:auto">
+        <summary class="btn btn-ghost">+ Joueur sans compte</summary>
         <form method="post" action="/tournaments/<%= tournament._id %>/guests" class="guest-form">
           <label>Pseudo <input name="username" required minlength="2" maxlength="40" placeholder="ex : Sam"></label>
           <label>E-mail <input type="email" name="email" required placeholder="sam@exemple.fr"></label>
@@ -112,140 +134,155 @@
         </form>
         <p class="muted">Il/elle reçoit un lien pour créer son compte et garder son historique<%= mailConfigured ? '' : ' (e-mail non configuré : le lien te sera affiché à transmettre)' %>. Le deck pourra être renseigné après coup.</p>
       </details>
+      <span class="spacer"></span>
+      <span class="action-status"><%= tournament.players.length < 2 ? 'Il faut au moins 2 inscrits' : tournament.players.length + ' inscrits · prêt à lancer' %></span>
     <% } else if (tournament.status === 'en_cours') { %>
-      <% const pending = lastRound && lastRound.matches.some(m => !m.result); %>
+      <% const pending = pendingCount > 0; %>
       <form method="post" action="/tournaments/<%= tournament._id %>/rounds" class="inline">
-        <button class="btn btn-gold" <%= pending ? 'disabled' : '' %>>▶ Ronde suivante</button>
+        <button class="btn btn-gold" <%= pending ? 'disabled' : '' %> title="<%= pending ? 'Saisis d’abord tous les résultats' : 'Apparier la ronde ' + (lastRound.number + 1) %>">▶ Ronde <%= lastRound.number + 1 %></button>
       </form>
       <form method="post" action="/tournaments/<%= tournament._id %>/finish" class="inline" data-confirm="Le tournoi sera marqué terminé et la coupe attribuée au 1er du classement. Tu pourras le rouvrir ensuite si besoin." data-confirm-title="Clôturer le tournoi ?" data-confirm-ok="🏁 Clôturer et remettre la coupe" data-confirm-icon="🏆">
-        <button class="btn btn-danger" <%= pending ? 'disabled' : '' %>>🏁 Clôturer & remettre la coupe</button>
+        <button class="btn btn-danger" <%= pending ? 'disabled' : '' %>>🏁 Clôturer</button>
       </form>
-      <% if (pending) { %><span class="muted">— saisis tous les résultats de la ronde en cours</span><% } %>
+      <span class="spacer"></span>
+      <span class="action-status">
+        <span class="progress"><i style="width: <%= totalTables ? Math.round((totalTables - pendingCount) / totalTables * 100) : 100 %>%"></i></span>
+        <%= totalTables - pendingCount %>/<%= totalTables %> résultats saisis<%= pending ? ' — table' + (pendingCount > 1 ? 's ' : ' ') + lastRound.matches.filter(m => !m.result).map(m => m.table).join(', ') + ' en attente' : ' ✓' %>
+      </span>
     <% } else if (tournament.status === 'terminé') { %>
       <form method="post" action="/tournaments/<%= tournament._id %>/reopen" class="inline"
             data-confirm="Rouvrir le tournoi ?<%= tournament.winner ? ' La coupe sera retirée jusqu’à la prochaine clôture.' : '' %>" data-confirm-title="Rouvrir le tournoi">
-        <button class="btn btn-ghost">↺ Rouvrir le tournoi</button>
+        <button class="btn btn-ghost">↺ Rouvrir</button>
       </form>
-      <span class="muted">— <%= tournament.rounds.length > 0 ? 'reprend à la ronde ' + tournament.rounds.length : 'rouvre les inscriptions' %></span>
+      <span class="action-status"><%= tournament.rounds.length > 0 ? 'reprend à la ronde ' + tournament.rounds.length : 'rouvre les inscriptions' %></span>
     <% } %>
   </div>
 <% } %>
 
 <!-- Onglets -->
 <nav class="tabs">
-  <a href="?tab=rondes" class="<%= tab === 'rondes' ? 'active' : '' %>">Rondes</a>
+  <a href="?tab=rondes" class="<%= tab === 'rondes' ? 'active' : '' %>">Rondes<%= tournament.rounds.length ? ' (' + tournament.rounds.length + ')' : '' %></a>
   <a href="?tab=classement" class="<%= tab === 'classement' ? 'active' : '' %>">Classement</a>
   <a href="?tab=joueurs" class="<%= tab === 'joueurs' ? 'active' : '' %>">Joueurs (<%= tournament.players.length %>)</a>
 </nav>
 
 <% if (tab === 'rondes') { %>
   <% if (tournament.rounds.length === 0) { %>
-    <div class="empty">Les appariements apparaîtront ici au lancement du tournoi.</div>
+    <div class="empty">
+      <span class="empty-icon">🎴</span>
+      <strong>Pas encore de pairings</strong>
+      <p>Ils apparaîtront ici au lancement de la ronde 1<%= organizer ? ' — c’est toi qui lances' : ' par ' + tournament.organizerName %>. En attendant, <a href="?tab=joueurs">voir les inscrits</a>.</p>
+    </div>
   <% } %>
-  <% const recordOf = Object.fromEntries(standings.map(s => [String(s.userId), s.wins + '-' + s.draws + '-' + s.losses])); %>
-  <% for (const round of [...tournament.rounds].reverse()) { %>
+  <% const bestOf = tournament.bestOf || 1; const need = Math.ceil(bestOf / 2); %>
+  <% for (const round of [...tournament.rounds].reverse()) { const isCurrent = round.number === tournament.rounds.length && tournament.status === 'en_cours'; const recordOf = recordByRound[round.number] || {}; %>
     <div class="card round-card">
-      <h2>Ronde <%= round.number %> <span class="muted">— lancée à <%= round.startedAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) %></span></h2>
-      <table class="table">
-        <thead><tr><th>Table</th><th>Joueur 1</th><th>Joueur 2</th><th>Résultat</th></tr></thead>
-        <tbody>
-        <% for (const m of round.matches) { %>
-          <tr>
-            <td><%= m.bye ? '—' : m.table %></td>
-            <% const matchUrl = m.bye ? null : `/tournaments/${tournament._id}/rounds/${round.number}/tables/${m.table}`; %>
-            <td>
-              <% if (matchUrl) { %><a href="<%= matchUrl %>" class="pairing-cell"><% } %>
-                <strong><%= m.p1.username %></strong> <span class="muted">(<%= recordOf[String(m.p1.userId)] || '0-0-0' %>)</span>
-                <% if (m.siding && m.siding[String(m.p1.userId)] && (tournament.status === 'terminé' || (currentUser && currentUser.id === String(m.p1.userId)))) { %><span title="Side deck noté">🔁</span><% } %>
-                <span class="muted deck-tag"><%= m.p1.deckName %></span>
-              <% if (matchUrl) { %></a><% } %>
-            </td>
-            <td>
-              <% if (m.bye) { %><em class="muted">BYE (victoire automatique)</em>
-              <% } else { %>
-                <a href="<%= matchUrl %>" class="pairing-cell">
-                  <strong><%= m.p2.username %></strong> <span class="muted">(<%= recordOf[String(m.p2.userId)] || '0-0-0' %>)</span>
-                  <% if (m.siding && m.siding[String(m.p2.userId)] && (tournament.status === 'terminé' || (currentUser && currentUser.id === String(m.p2.userId)))) { %><span title="Side deck noté">🔁</span><% } %>
-                  <span class="muted deck-tag"><%= m.p2.deckName %></span>
-                </a>
-              <% } %>
-            </td>
-            <td>
-              <% const bestOf = tournament.bestOf || 1; %>
-              <% const need = Math.ceil(bestOf / 2); %>
-              <% if (m.bye) { %>
-                <span class="result-chip win"><%= m.p1.username %> ✓ (bye)</span>
-              <% } else if (m.result) { %>
-                <% const g = m.games || (m.result === 'p1' ? { p1: need, p2: 0, draws: 0 } : m.result === 'p2' ? { p1: 0, p2: need, draws: 0 } : { p1: 1, p2: 1, draws: 0 }); %>
-                <% const score = m.result === 'p2' ? g.p2 + '-' + g.p1 : g.p1 + '-' + g.p2; %>
-                <% if (m.result === 'draw') { %><span class="result-chip draw">Nul <%= score %><%= g.draws ? ' (+' + g.draws + 'N)' : '' %></span>
-                <% } else { %><span class="result-chip win"><%= m.result === 'p1' ? m.p1.username : m.p2.username %> ✓ <%= score %><%= g.draws ? ' (+' + g.draws + 'N)' : '' %></span><% } %>
-                <% if (Array.isArray(m.gameResults)) { %>
-                  <span class="game-dots">
-                    <% m.gameResults.forEach((r, i) => { %><span class="game-dot <%= r === 'draw' ? 'dot-draw' : 'dot-win' %>" title="Manche <%= i + 1 %> : <%= r === 'draw' ? 'nul' : 'victoire ' + (r === 'p1' ? m.p1.username : m.p2.username) %>"><%= r === 'draw' ? 'N' : (r === 'p1' ? m.p1.username : m.p2.username).charAt(0).toUpperCase() %></span><% }) %>
-                  </span>
+      <div class="card-head">
+        <h2>Ronde <%= round.number %> <% if (isCurrent) { %><span class="badge badge-live">en cours</span><% } %> <span class="count">lancée à <%= round.startedAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) %></span></h2>
+        <span class="muted"><%= round.matches.filter(m => m.result).length %>/<%= round.matches.length %> résultats</span>
+      </div>
+      <div class="pairings">
+      <% for (const m of round.matches) { %>
+        <% const matchUrl = m.bye ? null : `/tournaments/${tournament._id}/rounds/${round.number}/tables/${m.table}`; %>
+        <% const mine = me && (String(m.p1.userId) === me || (m.p2 && String(m.p2.userId) === me)); %>
+        <% const canReport = currentUser && tournament.status === 'en_cours' && round.number === tournament.rounds.length && !m.bye && (organizer || mine); %>
+        <% const sideOf = (p) => m.siding && m.siding[String(p.userId)] && (tournament.status === 'terminé' || (me && me === String(p.userId))); %>
+        <% if (m.bye) { %>
+          <div class="pairing pairing-bye <%= mine ? 'pairing-me' : '' %>">
+            <div class="pairing-table"><b>—</b><span>bye</span></div>
+            <div class="pairing-player"><span class="avatar"><%= initial(m.p1.username) %></span><div class="pp-body"><span class="pp-name"><%= m.p1.username %> <span class="pp-record">(<%= recordOf[String(m.p1.userId)] || '0-0-0' %>)</span></span><span class="pp-deck"><%= m.p1.deckName %></span></div></div>
+            <div class="pairing-center"><span class="result-chip win">Bye ✓ victoire <%= need %>-0</span></div>
+          </div>
+        <% } else { %>
+          <% const g = m.result ? (m.games || (m.result === 'p1' ? { p1: need, p2: 0, draws: 0 } : m.result === 'p2' ? { p1: 0, p2: need, draws: 0 } : { p1: 1, p2: 1, draws: 0 })) : (m.games || { p1: 0, p2: 0, draws: 0 }); %>
+          <% const started = Array.isArray(m.gameResults) && m.gameResults.length > 0; %>
+          <div class="pairing <%= mine ? 'pairing-me' : '' %>">
+            <div class="pairing-table"><b><%= m.table %></b><span>table</span></div>
+            <a href="<%= matchUrl %>" class="pairing-player <%= m.result === 'p1' ? 'pp-winner' : '' %>">
+              <span class="avatar"><%= initial(m.p1.username) %></span>
+              <div class="pp-body">
+                <span class="pp-name"><%= m.p1.username %> <span class="pp-record">(<%= recordOf[String(m.p1.userId)] || '0-0-0' %>)</span><% if (sideOf(m.p1)) { %><span class="pp-side" title="Side deck noté">side</span><% } %></span>
+                <span class="pp-deck"><%= m.p1.deckName || 'deck non renseigné' %></span>
+              </div>
+            </a>
+            <a href="<%= matchUrl %>" class="pairing-center pairing-cell">
+              <% if (m.result || started) { %>
+                <span class="pairing-score <%= m.result === 'draw' ? 'draw' : '' %>"><%= g.p1 %> – <%= g.p2 %></span>
+                <% if (Array.isArray(m.gameResults) && m.gameResults.length) { %>
+                  <span class="pairing-games"><% m.gameResults.forEach((r, i) => { %><span class="game-dot <%= r === 'draw' ? 'dot-draw' : r === 'p1' ? 'dot-left' : 'dot-right' %>" title="Manche <%= i + 1 %> : <%= r === 'draw' ? 'nul' : 'victoire ' + (r === 'p1' ? m.p1.username : m.p2.username) %>"></span><% }) %></span>
                 <% } %>
+                <% if (!m.result) { %><span class="muted" style="font-size:0.72rem">en cours</span><% } else if (m.result === 'draw') { %><span class="muted" style="font-size:0.72rem">match nul</span><% } %>
+              <% } else { %>
+                <span class="pairing-score pending">VS</span>
+                <% if (isCurrent) { %><span class="muted" style="font-size:0.72rem">à jouer</span><% } %>
               <% } %>
-              <%
-                const canReport = currentUser && tournament.status === 'en_cours' && round.number === tournament.rounds.length && !m.bye
-                  && (organizer || [String(m.p1.userId), String(m.p2.userId)].includes(currentUser.id));
-              %>
+            </a>
+            <a href="<%= matchUrl %>" class="pairing-player right <%= m.result === 'p2' ? 'pp-winner' : '' %>">
+              <span class="avatar"><%= initial(m.p2.username) %></span>
+              <div class="pp-body">
+                <span class="pp-name"><% if (sideOf(m.p2)) { %><span class="pp-side" title="Side deck noté">side</span><% } %><span class="pp-record">(<%= recordOf[String(m.p2.userId)] || '0-0-0' %>)</span> <%= m.p2.username %></span>
+                <span class="pp-deck"><%= m.p2.deckName || 'deck non renseigné' %></span>
+              </div>
+            </a>
+            <div class="pairing-action">
               <% if (canReport) { %>
-                <a href="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= m.table %>" class="btn btn-small <%= m.result ? 'btn-ghost' : 'btn-gold' %>">
-                  <%= m.result ? 'Modifier' : '⚔️ Saisir le résultat' %>
-                </a>
-              <% } else if (!m.bye) { %>
-                <a href="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= m.table %>" class="muted match-link">détail →</a>
+                <a href="<%= matchUrl %>" class="btn <%= m.result ? 'btn-ghost btn-small' : 'btn-gold' %>"><%= m.result ? 'Modifier' : '⚔️ Saisir' %></a>
+              <% } else { %>
+                <a href="<%= matchUrl %>" class="btn btn-ghost btn-small">Détail</a>
               <% } %>
-            </td>
-          </tr>
+            </div>
+          </div>
         <% } %>
-        </tbody>
-      </table>
+      <% } %>
+      </div>
     </div>
   <% } %>
 
 <% } else if (tab === 'classement') { %>
   <div class="card">
     <% if (standings.length === 0) { %>
-      <div class="empty">Personne d'inscrit pour l'instant.</div>
+      <div class="empty"><span class="empty-icon">🏅</span><strong>Personne d'inscrit pour l'instant</strong><p>Le classement se remplit dès la première ronde.</p></div>
     <% } else { %>
-    <table class="table">
-      <thead><tr><th>#</th><th>Joueur</th><th>Deck</th><th>Points</th><th>V-N-D</th><th>Manches</th><th>OMW%</th><th>GW%</th><th>OGW%</th></tr></thead>
+    <div class="table-scroll">
+    <table class="table table-dense">
+      <thead><tr><th>#</th><th>Joueur</th><th class="col-secondary">Deck</th><th class="num">Pts</th><th class="num">V-N-D</th><th class="num col-secondary">Manches</th><th class="num col-secondary" title="Win rate matchs des adversaires">OMW%</th><th class="num" title="% de manches gagnées">GW%</th><th class="num col-secondary" title="% de manches gagnées des adversaires">OGW%</th></tr></thead>
       <tbody>
       <% for (const s of standings) { %>
-        <tr class="<%= s.rank === 1 && tournament.status === 'terminé' ? 'row-champion' : '' %>">
-          <td><%= s.rank %><%= s.rank === 1 && tournament.status === 'terminé' ? ' 🏆' : '' %></td>
-          <td><a href="/players/<%= s.userId %>"><strong><%= s.username %></strong></a><%= s.dropped ? ' (drop)' : '' %></td>
-          <td class="muted"><%= s.deckName %></td>
-          <td><strong><%= s.points %></strong></td>
-          <td><%= s.wins %>-<%= s.draws %>-<%= s.losses %><%= s.byes ? ' (dont ' + s.byes + ' bye)' : '' %></td>
-          <td><%= s.gameWins %>-<%= s.gameDraws %>-<%= s.gameLosses %></td>
-          <td><%= (s.omw * 100).toFixed(1) %>%</td>
-          <td><%= (s.gw * 100).toFixed(1) %>%</td>
-          <td><%= (s.ogw * 100).toFixed(1) %>%</td>
+        <tr class="<%= s.rank === 1 && tournament.status === 'terminé' ? 'row-champion' : '' %> <%= me === String(s.userId) ? 'row-me' : '' %>">
+          <td><span class="rank <%= tournament.status === 'terminé' && s.rank <= 3 ? 'rank-' + s.rank : '' %>"><%= s.rank %></span></td>
+          <td><a href="/players/<%= s.userId %>" class="player-cell"><span class="avatar"><%= initial(s.username) %></span><strong><%= s.username %></strong></a><%= s.dropped ? ' <span class="muted">(drop)</span>' : '' %><% if (s.rank === 1 && tournament.status === 'terminé') { %> 🏆<% } %></td>
+          <td class="muted col-secondary"><%= s.deckName %></td>
+          <td class="num"><strong><%= s.points %></strong></td>
+          <td class="num"><%= s.wins %>-<%= s.draws %>-<%= s.losses %><%- s.byes ? ' <span class="muted">(' + s.byes + ' bye)</span>' : '' %></td>
+          <td class="num col-secondary"><%= s.gameWins %>-<%= s.gameDraws %>-<%= s.gameLosses %></td>
+          <td class="num col-secondary"><%= (s.omw * 100).toFixed(1) %>%</td>
+          <td class="num"><%= (s.gw * 100).toFixed(1) %>%</td>
+          <td class="num col-secondary"><%= (s.ogw * 100).toFixed(1) %>%</td>
         </tr>
       <% } %>
       </tbody>
     </table>
-    <p class="muted">Tiebreakers dans l'ordre : points, OMW% (win rate matchs des adversaires), GW% (% de manches gagnées), OGW% (% de manches gagnées des adversaires). Plancher à 33 %, byes exclus des calculs adverses.</p>
+    </div>
+    <details class="advanced" style="margin-top:0.8rem"><summary class="muted">Comment sont départagées les égalités ?</summary>
+    <p class="muted">Tiebreakers dans l'ordre : points, OMW% (win rate matchs des adversaires), GW% (% de manches gagnées), OGW% (% de manches gagnées des adversaires). Plancher à 33 %, byes exclus des calculs adverses.</p></details>
     <% } %>
   </div>
 
 <% } else { %>
   <div class="card">
     <% if (tournament.players.length === 0) { %>
-      <div class="empty">Personne d'inscrit pour l'instant.</div>
+      <div class="empty"><span class="empty-icon">👥</span><strong>Personne d'inscrit pour l'instant</strong><p>Partage le lien du tournoi : chacun s'inscrit avec un de ses decks.</p></div>
     <% } else { %>
-    <table class="table">
+    <div class="table-scroll">
+    <table class="table table-dense">
       <thead><tr><th>Joueur</th><th>Deck</th><th></th></tr></thead>
       <tbody>
       <% for (const p of tournament.players) { %>
-        <tr>
+        <tr class="<%= me === String(p.userId) ? 'row-me' : '' %>">
           <% const gi = guestInfo[String(p.userId)]; %>
-          <td><a href="/players/<%= p.userId %>"><strong><%= p.username %></strong></a><% if (gi) { %> <span class="badge badge-guest" title="Compte non créé — <%= gi.email %>">invité·e</span><% } %><%= p.dropped ? ' <span class="muted">(drop)</span>' : '' %></td>
+          <td><a href="/players/<%= p.userId %>" class="player-cell"><span class="avatar"><%= initial(p.username) %></span><strong><%= p.username %></strong></a><% if (gi) { %> <span class="badge badge-guest" title="Compte non créé — <%= gi.email %>">invité·e</span><% } %><%= p.dropped ? ' <span class="muted">(drop)</span>' : '' %></td>
           <td class="muted">
-            <% if (p.deckId || p.deckName) { %><%= p.deckName %><%= p.deckVersion ? ' v' + p.deckVersion : '' %>
+            <% if (p.deckId || p.deckName) { %><%= p.deckName %><% if (p.deckVersion) { %> <span class="version-chip">v<%= p.deckVersion %></span><% } %>
             <% } else if (currentUser && currentUser.id === String(p.userId) && myDecks.length) { %>
               <form method="post" action="/tournaments/<%= tournament._id %>/my-deck" class="inline guest-deck-form">
                 <select name="deckId"><% for (const d of myDecks) { %><option value="<%= d._id %>"><%= d.name %></option><% } %></select>
@@ -253,7 +290,7 @@
               </form>
             <% } else { %><em>à renseigner</em><% } %>
           </td>
-          <td>
+          <td style="text-align:right">
             <% if (gi) { %>
               <form method="post" action="/tournaments/<%= tournament._id %>/guests/<%= p.userId %>/invite" class="inline">
                 <button class="btn btn-small btn-ghost" title="<%= gi.sentAt ? 'Dernier envoi le ' + gi.sentAt.toLocaleString('fr-FR') : 'Jamais envoyé' %>">✉ <%= gi.sentAt ? 'Renvoyer l’invitation' : 'Envoyer l’invitation' %></button>
@@ -262,7 +299,7 @@
             <% } %>
             <% if (organizer && !p.dropped && tournament.status === 'en_cours') { %>
               <form method="post" action="/tournaments/<%= tournament._id %>/players/<%= p.userId %>/drop" class="inline" data-confirm="<%= p.username %> ne sera plus apparié·e dans les prochaines rondes. Ses résultats déjà joués sont conservés." data-confirm-title="Retirer <%= p.username %> du tournoi ?" data-confirm-ok="Drop">
-                <button class="btn btn-small btn-danger">Drop</button>
+                <button class="btn btn-danger-text">Drop</button>
               </form>
             <% } %>
           </td>
@@ -270,9 +307,10 @@
       <% } %>
       </tbody>
     </table>
+    </div>
     <% } %>
   </div>
 <% } %>
 
-<script src="/timer.js"></script>
+<% if (tournament.status !== 'terminé') { %><div id="live" hidden data-url="/tournaments/<%= tournament._id %>/state" data-sig="<%= liveSig %>"></div><script src="/live.js"></script><% } %>
 <%- include('partials/foot') %>

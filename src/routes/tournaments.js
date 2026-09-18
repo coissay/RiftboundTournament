@@ -30,7 +30,7 @@ router.get('/', async (req, res, next) => {
     // La liste n'affiche ni les rondes ni la description : on ne les charge pas.
     const tournaments = await req.db
       .collection('tournaments')
-      .find({}, { projection: { rounds: 0, description: 0 } })
+      .find({})
       .sort({ date: -1 })
       .toArray();
     res.render('index', { tournaments });
@@ -76,6 +76,13 @@ router.get('/tournaments/:id', async (req, res, next) => {
     const tournament = await loadTournament(req, res);
     if (!tournament) return;
     const standings = computeStandings(tournament);
+    // Record affiché dans les pairings de chaque ronde : celui à l'entrée de la ronde (pas le final).
+    const recordByRound = {};
+    for (const round of tournament.rounds || []) {
+      recordByRound[round.number] = Object.fromEntries(
+        computeStandings(tournament, { beforeRound: round.number }).map((s) => [s.userId, `${s.wins}-${s.draws}-${s.losses}`])
+      );
+    }
     let myDecks = [];
     if (req.session.user) {
       myDecks = await req.db
@@ -98,6 +105,8 @@ router.get('/tournaments/:id', async (req, res, next) => {
     res.render('tournament', {
       tournament,
       standings,
+      recordByRound,
+      liveSig: liveSignature(tournament),
       myDecks,
       organizer,
       registered: !!me,
@@ -108,6 +117,24 @@ router.get('/tournaments/:id', async (req, res, next) => {
       plannedRounds: suggestedRounds(activePlayers.length, tournament.durationMinutes, tournament.roundLength),
       autoCloseDays: AUTO_CLOSE_DAYS,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- Signature d'état (rafraîchissement automatique des pages tournoi / match) ----
+export function liveSignature(tournament) {
+  const last = (tournament.rounds || [])[(tournament.rounds || []).length - 1];
+  const results = last ? (last.matches || []).map((m) => (m.result || '-') + ':' + (Array.isArray(m.gameResults) ? m.gameResults.length : 0)).join(',') : '';
+  return `${tournament.status}|${(tournament.rounds || []).length}|${(tournament.players || []).length}|${results}`;
+}
+
+router.get('/tournaments/:id/state', async (req, res, next) => {
+  try {
+    const tournament = await req.db.collection('tournaments').findOne({ _id: oid(req.params.id) }, { projection: { status: 1, rounds: 1, players: 1 } });
+    if (!tournament) return res.status(404).json({ error: 'not found' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ sig: liveSignature(tournament) });
   } catch (err) {
     next(err);
   }
@@ -410,7 +437,8 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
     if (!tournament) return;
     const { round, match } = findMatch(tournament, parseInt(req.params.roundNumber, 10), parseInt(req.params.table, 10));
     if (!match || match.bye) return res.status(404).render('error', { message: 'Match introuvable' });
-    const standings = computeStandings(tournament);
+    // Record à l'entrée de cette ronde (et non le record final du tournoi).
+    const standings = computeStandings(tournament, { beforeRound: round.number });
     const recordOf = Object.fromEntries(standings.map((s) => [s.userId, `${s.wins}-${s.draws}-${s.losses}`]));
     const viewer = req.session.user;
     const me = viewer ? [match.p1, match.p2].find((p) => String(p.userId) === viewer.id) || null : null;
@@ -458,6 +486,7 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
       // Manche « en cours » : la prochaine à jouer, bornée aux manches sidables, pour ouvrir le bon formulaire.
       currentGame: bestOf < 2 ? 1 : Math.min(Math.max(played + 1, 2), bestOf),
       cardImage: cardImageByName,
+      liveSig: liveSignature(tournament),
       sideSummary: (sd) => [...sd.out.map((c) => `−${c.qty} ${c.name}`), ...sd.in.map((c) => `+${c.qty} ${c.name}`)].join(', ') || 'aucun échange',
     });
   } catch (err) {

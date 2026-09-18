@@ -1,7 +1,12 @@
 <%- include('partials/head', { title: 'Erreur' }) %>
-<div class="card card-narrow">
-  <h1>Oups</h1>
-  <p><%= message %></p>
-  <a href="/" class="btn btn-ghost">← Retour aux tournois</a>
+<div class="card card-medium error-page">
+  <div class="error-code"><%= /introuvable/i.test(message) ? '404' : 'Oups' %></div>
+  <h1><%= /introuvable/i.test(message) ? 'Cette page n’existe pas' : 'Une erreur est survenue' %></h1>
+  <p class="muted"><%= message %> — le tournoi a peut-être été supprimé, ou le lien est incomplet.</p>
+  <div class="error-links">
+    <a href="/" class="btn btn-gold">🏆 Tournois</a>
+    <a href="/free-play" class="btn btn-ghost">🎲 Free play</a>
+    <a href="/decks" class="btn btn-ghost">🃏 Mes decks</a>
+  </div>
 </div>
 <%- include('partials/foot') %>

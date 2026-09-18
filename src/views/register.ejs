@@ -7,12 +7,12 @@
   <% } %>
   <form method="post" action="/register">
     <% if (invite) { %><input type="hidden" name="invite" value="<%= invite.token %>"><% } %>
-    <label>Pseudo <input name="username" required minlength="2" autofocus value="<%= invite ? invite.username : '' %>"></label>
+    <label>Pseudo <input name="username" required minlength="2" autofocus autocomplete="username" value="<%= invite ? invite.username : '' %>"></label>
     <label>E-mail <%= invite ? '' : '(facultatif)' %>
-      <input type="email" name="email" value="<%= invite ? invite.email : '' %>" <%= invite ? 'readonly' : '' %> placeholder="prenom.nom@exemple.fr">
+      <input type="email" name="email" autocomplete="email" value="<%= invite ? invite.email : '' %>" <%= invite ? 'readonly' : '' %> placeholder="prenom.nom@exemple.fr">
     </label>
     <% if (!invite) { %><p class="muted form-hint">Sert à te retrouver si un organisateur t'ajoute à un tournoi sans que tu sois inscrit·e.</p><% } %>
-    <label>Mot de passe <input type="password" name="password" required minlength="4"></label>
+    <label>Mot de passe <input type="password" name="password" required minlength="4" autocomplete="new-password"></label>
     <button class="btn btn-gold btn-block"><%= invite ? 'Récupérer mon compte' : 'Créer mon compte' %></button>
   </form>
   <p class="muted">Déjà un compte ? <a href="/login">Connexion</a></p>

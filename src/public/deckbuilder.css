@@ -5,7 +5,9 @@
 main:has(.db-layout) { max-width: 1500px; }
 
 .db-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); gap: 1rem; align-items: start; }
-.db-gallery, .db-deck { margin: 0; }
+.db-gallery, .db-deck { margin: 0; min-width: 0; } /* min-width:0 : un enfant de grille ne doit pas élargir la page sur mobile */
+/* Le panneau deck reste visible pendant qu'on fait défiler la galerie. */
+@media (min-width: 961px) { .db-deck { position: sticky; top: 4.2rem; max-height: calc(100vh - 5rem); overflow-y: auto; } }
 
 /* ---- Barre d'outils : onglets + cible d'ajout ---- */
 .db-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
@@ -148,6 +150,9 @@ main:has(.db-layout) { max-width: 1500px; }
 
 @media (max-width: 960px) {
   .db-layout { grid-template-columns: 1fr; }
+  .db-searchbar { flex-wrap: wrap; }
+  .db-searchbar input[type="search"] { flex-basis: 100%; min-width: 0; }
+  .db-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
   .db-deck { position: static; max-height: none; }
 }
 

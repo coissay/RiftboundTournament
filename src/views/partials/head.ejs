@@ -9,24 +9,48 @@
 <% } } %>  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏆</text></svg>">
 </head>
 <body>
+<%
+const _path = typeof currentPath === 'string' ? currentPath : '';
+const navActive = (prefix) => (prefix === '/' ? (_path === '/' || _path.startsWith('/tournaments')) : _path.startsWith(prefix)) ? 'nav-active' : '';
+%>
 <header class="topbar">
-  <a href="/" class="logo">⚔️ <span>Riftbound</span> Tournois</a>
+  <a href="/" class="logo"><%- include('icon', { name: 'swords' }) %> <span>Riftbound</span> Tournois</a>
   <nav>
-    <a href="/">Tournois</a>
-    <a href="/free-play">Free play</a>
-    <a href="/stats">Stats</a>
+    <a href="/" class="nav-main <%= navActive('/') %>">Tournois</a>
+    <a href="/free-play" class="nav-main <%= navActive('/free-play') %>">Free play</a>
+    <a href="/stats" class="nav-main <%= navActive('/stats') %>">Stats</a>
     <% if (currentUser) { %>
-      <a href="/decks">Mes decks</a>
-      <a href="/deckbuilder">Deckbuilder</a>
-      <span class="me">👤 <%= currentUser.username %></span>
-      <form action="/logout" method="post" class="inline"><button class="btn btn-ghost">Déconnexion</button></form>
+      <a href="/decks" class="nav-main <%= navActive('/decks') %>">Mes decks</a>
+      <a href="/deckbuilder" class="nav-main <%= navActive('/deckbuilder') %>">Deckbuilder</a>
+      <a href="/players/<%= currentUser.id %>" class="me-chip" title="Ma page joueur"><span class="avatar"><%= currentUser.username.charAt(0) %></span><span class="me"><%= currentUser.username %></span></a>
+      <form action="/logout" method="post" class="inline"><button class="btn btn-ghost btn-small">Déconnexion</button></form>
     <% } else { %>
-      <a href="/login">Connexion</a>
-      <a href="/register" class="btn btn-gold">Créer un compte</a>
+      <a href="/login" class="nav-main">Connexion</a>
+      <a href="/register" class="btn btn-gold btn-small">Créer un compte</a>
     <% } %>
   </nav>
 </header>
+<nav class="tabbar" aria-label="Navigation principale">
+  <a href="/" class="<%= navActive('/') %>"><span class="tab-icon"><%- include('icon', { name: 'trophy' }) %></span>Tournois</a>
+  <a href="/free-play" class="<%= navActive('/free-play') %>"><span class="tab-icon"><%- include('icon', { name: 'dice' }) %></span>Free play</a>
+  <a href="/stats" class="<%= navActive('/stats') %>"><span class="tab-icon"><%- include('icon', { name: 'chart' }) %></span>Stats</a>
+  <% if (currentUser) { %>
+    <a href="/decks" class="<%= navActive('/decks') %>"><span class="tab-icon"><%- include('icon', { name: 'cards' }) %></span>Decks</a>
+    <a href="/deckbuilder" class="<%= navActive('/deckbuilder') %>"><span class="tab-icon"><%- include('icon', { name: 'wrench' }) %></span>Builder</a>
+  <% } else { %>
+    <a href="/login"><span class="tab-icon"><%- include('icon', { name: 'key' }) %></span>Connexion</a>
+    <a href="/register"><span class="tab-icon"><%- include('icon', { name: 'user-plus' }) %></span>Compte</a>
+  <% } %>
+</nav>
 <main>
+<% if (typeof pendingMatch !== 'undefined' && pendingMatch) { %>
+  <a href="<%= pendingMatch.url %>" class="todo-banner" data-started="<%= pendingMatch.startedAt.getTime() %>" data-length="<%= pendingMatch.roundLength %>">
+    <span class="todo-icon">⚔️</span>
+    <span class="todo-body"><strong>C'est à toi de saisir</strong> — <%= pendingMatch.tournamentName %> · ronde <%= pendingMatch.round %> · table <%= pendingMatch.table %> contre <%= pendingMatch.opponent %></span>
+    <span class="todo-timer timer">--:--</span>
+    <span class="btn btn-gold btn-small">Ouvrir</span>
+  </a>
+<% } %>
 <% if (flash) { %>
-  <div class="flash flash-<%= flash.type %>"><%= flash.text %></div>
+  <div class="flash flash-<%= flash.type %>" role="status"><span><%= flash.text %></span><button type="button" class="flash-close" aria-label="Fermer" onclick="this.parentElement.remove()">×</button></div>
 <% } %>
