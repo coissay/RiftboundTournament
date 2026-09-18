@@ -54,8 +54,16 @@ async function call(path, { method = 'GET', body, token, scheme = 'Token' } = {}
     json = null;
   }
   if (!res.ok) {
-    const msg =
-      json?.non_field_errors?.join(' ') || json?.message || json?.detail || `HTTP ${res.status}`;
+    let msg = json?.non_field_errors?.join(' ') || json?.message || json?.detail || `HTTP ${res.status}`;
+    // Erreurs de validation (« Form is invalid ») : le détail par champ est dans `extra`.
+    const extra = json?.extra && typeof json.extra === 'object' ? json.extra : null;
+    const details = extra
+      ? Object.entries(extra)
+          .filter(([, v]) => v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0))
+          .map(([k, v]) => `${k} : ${Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : v}`)
+      : [];
+    if (details.length) msg += ` (${details.join(' ; ')})`;
+    console.error(`[locator] ${method} ${path} → ${res.status} ${text.slice(0, 500)}`);
     throw new LocatorError(msg, res.status);
   }
   return json;
@@ -115,16 +123,51 @@ export async function fetchStats(auth) {
   return call(`/api/v2/player/games/${GAME}/stats/`, auth);
 }
 
-/** Historique complet des tournois (toutes les pages). */
+/**
+ * Historique complet des tournois (toutes les pages).
+ * L'API valide les paramètres de requête (« Form is invalid » en 400) : on essaie plusieurs
+ * variantes de pagination, de la plus efficace à la plus simple, et on garde celle qui passe.
+ */
+const HISTORY_QUERY_VARIANTS = [
+  (page) => `?page=${page}&page_size=100`,
+  (page) => `?page=${page}&page_size=20`,
+  (page) => `?page=${page}`,
+  () => '',
+];
+
 export async function fetchTournamentHistory(auth) {
   const all = [];
+  const seen = new Set();
   let page = 1;
-  for (let guard = 0; guard < 50; guard++) {
-    const data = await call(`/api/v2/player/games/${GAME}/tournament-history/?page=${page}&page_size=100`, auth);
+  let variant = null;
+  for (let guard = 0; guard < 100; guard++) {
+    let data = null;
+    if (variant === null) {
+      let lastErr = null;
+      for (const v of HISTORY_QUERY_VARIANTS) {
+        try {
+          data = await call(`/api/v2/player/games/${GAME}/tournament-history/${v(page)}`, auth);
+          variant = v;
+          break;
+        } catch (err) {
+          lastErr = err;
+          if (err.status !== 400) throw err; // 401/403/5xx : inutile d'insister
+        }
+      }
+      if (variant === null) throw lastErr;
+    } else {
+      data = await call(`/api/v2/player/games/${GAME}/tournament-history/${variant(page)}`, auth);
+    }
     const results = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
-    all.push(...results);
-    if (!data?.next_page_number || results.length === 0) break;
-    page = data.next_page_number;
+    for (const r of results) {
+      const key = r?.event_id ?? JSON.stringify(r);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push(r);
+    }
+    const next = data?.next_page_number ?? (data?.has_next && data?.current_page_number ? data.current_page_number + 1 : null);
+    if (!next || results.length === 0 || variant === HISTORY_QUERY_VARIANTS[3]) break;
+    page = next;
   }
   return all;
 }
