@@ -1,0 +1,42 @@
+<%
+/* Formulaire de side deck pour UNE manche.
+   Attend : n, mine (side déjà noté ou null), prev (side de la manche précédente, pour préremplir),
+   tournament, round, match, myDeckLines, cardImage, noHeading (bool, optionnel). */
+const base = mine || prev;
+const outQty = Object.fromEntries((base ? base.out : []).map(c => [c.name, c.qty]));
+const inQty = Object.fromEntries((base ? base.in : []).map(c => [c.name, c.qty]));
+%>
+<form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/siding" class="siding-form-body">
+  <input type="hidden" name="game" value="<%= n %>">
+  <% if (!mine && prev) { %><p class="muted">Prérempli d'après ta manche précédente — ajuste puis enregistre.</p><% } %>
+  <% if (myDeckLines && (myDeckLines.main.length || myDeckLines.sideboard.length)) { %>
+    <input type="hidden" name="mode" value="qty">
+    <div class="siding-grid">
+      <div class="siding-col">
+        <h4>Sorties <span class="muted">(deck principal)</span></h4>
+        <% myDeckLines.main.forEach((c, i) => { %>
+          <label class="siding-line"><input type="number" name="out_<%= i %>" min="0" max="<%= c.qty %>" value="<%= outQty[c.name] || 0 %>"> <span><%- include('card-name', { name: c.name, cardImage }) %> <span class="muted">×<%= c.qty %></span></span></label>
+        <% }) %>
+      </div>
+      <div class="siding-col">
+        <h4>Entrées <span class="muted">(réserve)</span></h4>
+        <% if (myDeckLines.sideboard.length === 0) { %><p class="muted">Aucune réserve dans cette version du deck.</p><% } %>
+        <% myDeckLines.sideboard.forEach((c, i) => { %>
+          <label class="siding-line"><input type="number" name="in_<%= i %>" min="0" max="<%= c.qty %>" value="<%= inQty[c.name] || 0 %>"> <span><%- include('card-name', { name: c.name, cardImage }) %> <span class="muted">×<%= c.qty %></span></span></label>
+        <% }) %>
+      </div>
+    </div>
+  <% } else { %>
+    <input type="hidden" name="mode" value="text">
+    <p class="muted">Deck introuvable : indique les cartes à la main, une par ligne (« 2 Nom de la carte »).</p>
+    <div class="siding-grid">
+      <label>Sorties <textarea name="outText" rows="4"><%= (base ? base.out : []).map(c => c.qty + ' ' + c.name).join('\n') %></textarea></label>
+      <label>Entrées <textarea name="inText" rows="4"><%= (base ? base.in : []).map(c => c.qty + ' ' + c.name).join('\n') %></textarea></label>
+    </div>
+  <% } %>
+  <label>Note <input name="note" maxlength="300" value="<%= mine ? mine.note : '' %>" placeholder="ex : contre son aggro, j'ai sorti les cartes lentes"></label>
+  <div class="row-actions">
+    <button class="btn btn-gold btn-small"><%= mine ? 'Mettre à jour' : 'Enregistrer' %> le side de la manche <%= n %></button>
+    <% if (mine) { %><span class="muted">Tout à 0 et note vide = effacer.</span><% } %>
+  </div>
+</form>

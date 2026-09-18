@@ -510,8 +510,28 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .sided-badge-inline.sided-out { background: var(--danger); }
 .siding-grid .sided-deck-view .card-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
 
-.siding-game { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.7rem; margin-bottom: 0.6rem; background: var(--bg); }
-.siding-game-head { margin-bottom: 0.4rem; }
-.siding-forms { margin-top: 1rem; }
-.siding-forms h3 { margin: 0 0 0.5rem; font-size: 1rem; }
-.siding-forms .siding-form { margin-top: 0.5rem; }
+
+/* Side deck : intégré à la carte de score + récap en accordéon après clôture */
+.siding-accordion { display: flex; flex-direction: column; gap: 0.5rem; }
+.siding-panel { border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.siding-panel-current { border-color: rgba(212, 169, 65, 0.6); }
+.siding-panel summary { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; padding: 0.6rem 0.9rem; cursor: pointer; list-style: none; }
+.siding-panel summary::-webkit-details-marker { display: none; }
+.siding-panel summary::before { content: '▸'; color: var(--muted); width: 1em; }
+.siding-panel[open] summary::before { content: '▾'; }
+.siding-panel[open] summary { border-bottom: 1px solid var(--border); }
+.siding-panel-title { font-weight: 700; }
+.siding-panel-summary { flex: 1 1 200px; }
+.siding-panel-body { padding: 0.8rem 0.9rem; }
+.siding-sep { border: 0; border-top: 1px dashed var(--border); margin: 0.8rem 0; }
+.manche-side { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem 1.2rem; margin: -0.1rem 0 0.5rem; font-size: 0.9rem; }
+.manche-side-player { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.siding-inline-chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+.siding-inline-chips .sided-deck { margin: 0; display: inline-block; }
+.manche-side-current { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.8rem; margin: 0 0 0.8rem; flex-direction: column; align-items: center; }
+.manche-side-opp { font-size: 0.85rem; }
+.siding-form-current { margin-top: 0.8rem; text-align: left; }
+.siding-form-current summary { list-style: none; cursor: pointer; display: inline-block; }
+.siding-form-current summary::-webkit-details-marker { display: none; }
+.siding-form-body { margin-top: 0.6rem; }
+.sided-deck summary::marker, .siding-form summary::marker, .siding-form-current summary::marker, .siding-panel summary::marker, .guest-add summary::marker { content: ''; }

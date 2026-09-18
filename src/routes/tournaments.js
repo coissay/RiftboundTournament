@@ -446,6 +446,7 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
       // Manche « en cours » : la prochaine à jouer, bornée aux manches sidables, pour ouvrir le bon formulaire.
       currentGame: bestOf < 2 ? 1 : Math.min(Math.max(played + 1, 2), bestOf),
       cardImage: cardImageByName,
+      sideSummary: (sd) => [...sd.out.map((c) => `−${c.qty} ${c.name}`), ...sd.in.map((c) => `+${c.qty} ${c.name}`)].join(', ') || 'aucun échange',
     });
   } catch (err) {
     next(err);

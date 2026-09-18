@@ -31,12 +31,22 @@
 
   <% if (played > 0) { %>
     <div class="manche-history">
-      <% match.gameResults.forEach((r, i) => { %>
+      <% match.gameResults.forEach((r, i) => { const n = i + 1; %>
         <div class="manche-line">
-          <span class="muted">Manche <%= i + 1 %></span>
+          <span class="muted">Manche <%= n %></span>
           <% if (r === 'draw') { %><span class="result-chip draw">Nul</span>
           <% } else { %><span class="result-chip win">Victoire <%= r === 'p1' ? match.p1.username : match.p2.username %></span><% } %>
         </div>
+          <div class="manche-side">
+            <% if (!sidingGames.includes(n)) { %><span class="muted">🔁 deck inscrit des deux côtés</span>
+            <% } else { for (const side of ['p1', 'p2']) { const sd = siding[side].games[n]; %>
+              <span class="manche-side-player"><span class="muted"><%= side === mySide ? 'Mon side' : match[side].username %> :</span>
+                <% if (!sd) { %><span class="muted">—</span>
+                <% } else if (!sidingVisible[side]) { %><span class="muted">🔒 jusqu'à la clôture</span>
+                <% } else { %><%- include('partials/siding-chips', { sd, sdk: sidedDecks[side][n] || null, n, cardImage, thumb, inline: true }) %><% } %>
+              </span>
+            <% } } %>
+          </div>
       <% }) %>
     </div>
   <% } %>
@@ -44,6 +54,22 @@
   <% if (canReport && !decided) { %>
     <div class="manche-report">
       <p class="manche-title">Manche <%= played + 1 %> — qui l'emporte ?</p>
+      <% const cur = played + 1; const curSidable = sidingGames.includes(cur); %>
+      <% if (curSidable) { %>
+        <div class="manche-side manche-side-current">
+          <% if (mySide) { const mine = mySiding.games[cur] || null; %>
+            <span class="manche-side-player"><span class="muted">🔁 Ton side pour cette manche :</span>
+              <% if (mine) { %><%- include('partials/siding-chips', { sd: mine, sdk: sidedDecks[mySide][cur] || null, n: cur, cardImage, thumb, inline: true }) %>
+              <% } else { %><span class="muted">deck inscrit (aucun échange)</span><% } %>
+              <a href="#siding-form-current" class="btn btn-small <%= mine ? 'btn-ghost' : 'btn-gold' %>" onclick="document.getElementById('siding-form-current').open=true"><%= mine ? '✎ modifier' : '+ noter mon side' %></a>
+            </span>
+            <% const opp = mySide === 'p1' ? 'p2' : 'p1'; const osd = siding[opp].games[cur]; %>
+            <span class="muted manche-side-opp"><%= match[opp].username %> : <%= osd ? (sidingVisible[opp] ? sideSummary(osd) : '🔒 side renseigné, visible à la clôture') : 'rien de noté' %></span>
+          <% } else { %>
+            <span class="muted">🔁 <%= ['p1','p2'].map(s => match[s].username + ' : ' + (siding[s].games[cur] ? (sidingVisible[s] ? sideSummary(siding[s].games[cur]) : '🔒') : '—')).join(' · ') %></span>
+          <% } %>
+        </div>
+      <% } %>
       <div class="report-buttons">
         <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/games">
           <input type="hidden" name="gameResult" value="p1">
@@ -69,6 +95,23 @@
     <p class="muted">Seuls les joueurs de la table ou l'organisateur peuvent saisir le résultat<%= currentUser ? '' : ' — connecte-toi' %>.</p>
   <% } %>
 
+  <% if (mySide && !decided && sidingGames.includes(played + 1)) { const cur = played + 1; const mine = mySiding.games[cur] || null; %>
+    <% let prev = null; for (let k = cur - 1; k >= sidingGames[0] && !prev; k--) prev = mySiding.games[k] || null; %>
+    <details class="siding-form siding-form-current" id="siding-form-current">
+      <summary class="btn btn-ghost btn-small">🔁 <%= mine ? 'Modifier mon side de la manche ' + cur : 'Noter mon side pour la manche ' + cur %></summary>
+      <%- include('partials/siding-form', { n: cur, mine, prev, tournament, round, match, myDeckLines, cardImage }) %>
+    </details>
+  <% } %>
+  <% if (mySide && decided && tournament.status !== 'terminé') { %>
+    <details class="siding-form siding-form-current">
+      <summary class="btn btn-ghost btn-small">🔁 Noter / corriger mes sides après coup</summary>
+      <% for (const n of sidingGames) { if (n > played) continue; const mine = mySiding.games[n] || null; let prev = null; for (let k = n - 1; k >= sidingGames[0] && !prev; k--) prev = mySiding.games[k] || null; %>
+        <h4>Manche <%= n %></h4>
+        <%- include('partials/siding-form', { n, mine, prev, tournament, round, match, myDeckLines, cardImage }) %>
+      <% } %>
+    </details>
+  <% } %>
+
   <% if (canReport && played > 0) { %>
     <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/reset"
           class="reset-form" onsubmit="return confirm('Effacer toutes les manches saisies pour ce match ?')">
@@ -77,105 +120,9 @@
   <% } %>
 </div>
 
-<!-- Side deck : cartes échangées avec la réserve, manche par manche -->
-<div class="card match-card" id="side-deck">
-  <h2>🔁 Side deck <span class="muted">— échanges avec la réserve, par manche</span></h2>
-  <% const bo = tournament.bestOf || 1; %>
-  <% { %>
-    <% if (bo < 2) { %>
-      <p class="muted">Match en Bo1 : l'unique manche peut être sidée directement. Chaque joueur note ses échanges par rapport au deck inscrit, pendant le tournoi ou après coup.<% if (tournament.status !== 'terminé') { %> Ils restent <strong>cachés à l'adversaire</strong> jusqu'à la clôture du tournoi.<% } %></p>
-    <% } else { %>
-      <p class="muted">La manche 1 se joue avec le deck inscrit (le deck repart de zéro à chaque nouvel adversaire). À partir de la manche 2, chaque joueur note ses échanges pour la manche, pendant le tournoi ou après coup.<% if (tournament.status !== 'terminé') { %> Ils restent <strong>cachés à l'adversaire</strong> jusqu'à la clôture du tournoi.<% } %></p>
-    <% } %>
-    <div class="siding-grid">
-      <% for (const side of ['p1', 'p2']) { const p = match[side]; const games = siding[side].games; const nGames = Object.keys(games).length; %>
-        <div class="siding-col">
-          <h3><%= p.username %> <span class="muted deck-tag"><%= p.deckName %><%= p.deckVersion ? ' v' + p.deckVersion : '' %></span></h3>
-          <% if (nGames === 0) { %>
-            <p class="muted">Aucun échange noté.</p>
-          <% } else if (!sidingVisible[side]) { %>
-            <p class="muted">🔒 Side deck renseigné (manche<%= nGames > 1 ? 's' : '' %> <%= Object.keys(games).join(', ') %>) — visible à la clôture du tournoi.</p>
-          <% } else { %>
-            <% for (const n of sidingGames) { const sd = games[n]; if (!sd) continue; const sdk = sidedDecks[side][n]; %>
-              <div class="siding-game">
-                <div class="siding-game-head"><strong>Manche <%= n %></strong> <span class="muted">· mis à jour le <%= sd.updatedAt.toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) %></span></div>
-                <div class="siding-lists">
-                  <div><span class="muted">Sorties</span><% if (sd.out.length === 0) { %> <span class="muted">—</span><% } %>
-                    <ul class="siding-list"><% for (const c of sd.out) { %><li><span class="diff-chip diff-del">−<%= c.qty %> <%- include('partials/card-name', { name: c.name, cardImage }) %></span></li><% } %></ul>
-                  </div>
-                  <div><span class="muted">Entrées</span><% if (sd.in.length === 0) { %> <span class="muted">—</span><% } %>
-                    <ul class="siding-list"><% for (const c of sd.in) { %><li><span class="diff-chip diff-add">+<%= c.qty %> <%- include('partials/card-name', { name: c.name, cardImage }) %></span></li><% } %></ul>
-                  </div>
-                </div>
-                <% if (sd.note) { %><p class="siding-note"><%= sd.note %></p><% } %>
-                <% if (sdk) { %>
-                  <details class="sided-deck">
-                    <summary class="btn btn-ghost btn-small">🃏 Deck joué en manche <%= n %> <span class="muted">(principal <%= sdk.mainCount %> · réserve <%= sdk.sideCount %>)</span></summary>
-                    <div class="sided-deck-view">
-                      <p class="muted"><span class="sided-badge sided-badge-inline sided-in">IN</span> entrée dans le deck principal, <span class="sided-badge sided-badge-inline sided-out">OUT</span> sortie en réserve, par rapport au deck inscrit.</p>
-                      <%- include('partials/deck-view', { resolved: sdk.resolved, thumb, compact: true, highlight: sdk.highlight }) %>
-                    </div>
-                  </details>
-                <% } %>
-              </div>
-            <% } %>
-          <% } %>
-        </div>
-      <% } %>
-    </div>
-
-    <% if (me) { %>
-      <div class="siding-forms">
-        <h3>Mon side deck</h3>
-        <% for (const n of sidingGames) { %>
-          <% const mine = mySiding.games[n] || null; %>
-          <% /* Préremplissage : ma saisie pour cette manche, sinon celle de la manche précédente (on part du deck déjà sidé). */ %>
-          <% let prev = null; for (let k = n - 1; k >= sidingGames[0] && !prev; k--) prev = mySiding.games[k] || null; %>
-          <% const base = mine || prev; %>
-          <% const outQty = Object.fromEntries((base ? base.out : []).map(c => [c.name, c.qty])); %>
-          <% const inQty = Object.fromEntries((base ? base.in : []).map(c => [c.name, c.qty])); %>
-          <details class="siding-form" <%= !mine && n === currentGame ? 'open' : '' %>>
-            <summary class="btn <%= mine ? 'btn-ghost' : 'btn-gold' %> btn-small"><%= mine ? '✎ Manche ' + n + ' — modifier' : '+ Manche ' + n + ' — noter mon side' %></summary>
-            <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/siding">
-              <input type="hidden" name="game" value="<%= n %>">
-              <% if (!mine && prev) { %><p class="muted">Prérempli d'après ta manche précédente — ajuste puis enregistre.</p><% } %>
-              <% if (myDeckLines && (myDeckLines.main.length || myDeckLines.sideboard.length)) { %>
-                <input type="hidden" name="mode" value="qty">
-                <div class="siding-grid">
-                  <div class="siding-col">
-                    <h4>Sorties <span class="muted">(deck principal)</span></h4>
-                    <% myDeckLines.main.forEach((c, i) => { %>
-                      <label class="siding-line"><input type="number" name="out_<%= i %>" min="0" max="<%= c.qty %>" value="<%= outQty[c.name] || 0 %>"> <span><%- include('partials/card-name', { name: c.name, cardImage }) %> <span class="muted">×<%= c.qty %></span></span></label>
-                    <% }) %>
-                  </div>
-                  <div class="siding-col">
-                    <h4>Entrées <span class="muted">(réserve)</span></h4>
-                    <% if (myDeckLines.sideboard.length === 0) { %><p class="muted">Aucune réserve dans cette version du deck.</p><% } %>
-                    <% myDeckLines.sideboard.forEach((c, i) => { %>
-                      <label class="siding-line"><input type="number" name="in_<%= i %>" min="0" max="<%= c.qty %>" value="<%= inQty[c.name] || 0 %>"> <span><%- include('partials/card-name', { name: c.name, cardImage }) %> <span class="muted">×<%= c.qty %></span></span></label>
-                    <% }) %>
-                  </div>
-                </div>
-              <% } else { %>
-                <input type="hidden" name="mode" value="text">
-                <p class="muted">Deck introuvable : indique les cartes à la main, une par ligne (« 2 Nom de la carte »).</p>
-                <div class="siding-grid">
-                  <label>Sorties <textarea name="outText" rows="4"><%= (base ? base.out : []).map(c => c.qty + ' ' + c.name).join('\n') %></textarea></label>
-                  <label>Entrées <textarea name="inText" rows="4"><%= (base ? base.in : []).map(c => c.qty + ' ' + c.name).join('\n') %></textarea></label>
-                </div>
-              <% } %>
-              <label>Note <input name="note" maxlength="300" value="<%= mine ? mine.note : '' %>" placeholder="ex : contre son aggro, j'ai sorti les cartes lentes"></label>
-              <div class="row-actions">
-                <button class="btn btn-gold btn-small">Enregistrer la manche <%= n %></button>
-                <% if (mine) { %><span class="muted">Tout à 0 et note vide = effacer.</span><% } %>
-              </div>
-            </form>
-          </details>
-        <% } %>
-      </div>
-    <% } %>
-  <% } %>
-</div>
+<% if (tournament.status === 'terminé') { %>
+<%- include('partials/siding-accordion', { recap: true }) %>
+<% } %>
 
 <% if (tournament.status === 'en_cours' && round.number === tournament.rounds.length) { %>
   <div class="timer-bar" data-started="<%= round.startedAt.getTime() %>" data-length="<%= tournament.roundLength %>">
