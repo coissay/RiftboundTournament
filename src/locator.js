@@ -174,6 +174,21 @@ export async function fetchTournamentHistory(auth) {
 }
 
 /** Normalise un événement de l'historique locator en document pour la collection `external_events`. */
+// Résultat d'un match : les drapeaux de l'API ne sont pas toujours renseignés (`is_loss` reste
+// faux sur une défaite), on retombe alors sur le score de manches.
+export function matchOutcome(m) {
+  if (m.is_bye) return 'bye';
+  if (m.is_draw) return 'draw';
+  if (m.is_winner) return 'win';
+  if (m.is_loss) return 'loss';
+  const won = m.games_won ?? 0;
+  const lost = m.games_lost ?? 0;
+  if (won > lost) return 'win';
+  if (lost > won) return 'loss';
+  if (won > 0 && won === lost) return 'draw';
+  return 'unknown';
+}
+
 export function normalizeEvent(ev) {
   const matches = (ev.matches || []).map((m) => ({
     round: m.round_number,
@@ -181,8 +196,17 @@ export function normalizeEvent(ev) {
     oppId: m.opponent_id ?? null,
     gamesWon: m.games_won ?? 0,
     gamesLost: m.games_lost ?? 0,
-    outcome: m.is_bye ? 'bye' : m.is_draw ? 'draw' : m.is_winner ? 'win' : m.is_loss ? 'loss' : 'unknown',
+    outcome: matchOutcome(m),
   }));
+  // Matchs encore indéterminés (ex. 0-0 sans drapeau) : on les réconcilie avec les totaux de
+  // l'événement (nuls, puis défaites, puis victoires — les victoires de l'API incluent les byes).
+  const count = (o) => matches.filter((x) => x.outcome === o).length;
+  for (const m of matches) {
+    if (m.outcome !== 'unknown') continue;
+    if ((ev.matches_drawn ?? 0) > count('draw')) m.outcome = 'draw';
+    else if ((ev.matches_lost ?? 0) > count('loss')) m.outcome = 'loss';
+    else if ((ev.matches_won ?? 0) > count('win') + count('bye')) m.outcome = 'win';
+  }
   const deck = ev.deck
     ? {
         id: ev.deck.deck_id || ev.deck_id || null,
