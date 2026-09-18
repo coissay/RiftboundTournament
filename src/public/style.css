@@ -490,3 +490,22 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 
 /* Nom de carte survolable (popover image) */
 .card-name { cursor: zoom-in; text-decoration: underline dotted; text-underline-offset: 3px; }
+
+/* Deck après side (page match) */
+.sided-deck { margin-top: 0.6rem; }
+.sided-deck summary { list-style: none; cursor: pointer; display: inline-block; }
+.sided-deck summary::-webkit-details-marker { display: none; }
+.sided-deck-view { margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px solid var(--border); }
+.card-thumb.card-sided-in { outline: 2px solid var(--live); outline-offset: -2px; }
+.card-thumb.card-sided-out { outline: 2px solid var(--danger); outline-offset: -2px; }
+.sided-badge {
+  position: absolute; left: 4px; top: 4px;
+  font-size: 0.65rem; font-weight: 800; letter-spacing: 0.05em;
+  padding: 0.1rem 0.35rem; border-radius: 5px; color: var(--bg);
+}
+.card-sided-in .sided-badge { background: var(--live); }
+.card-sided-out .sided-badge { background: var(--danger); }
+.sided-badge-inline { position: static; display: inline-block; }
+.sided-badge-inline.sided-in { background: var(--live); }
+.sided-badge-inline.sided-out { background: var(--danger); }
+.siding-grid .sided-deck-view .card-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }

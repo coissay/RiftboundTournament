@@ -1,6 +1,9 @@
 <%
-/* Attend : resolved (résultat de resolveDecklist), thumb (fonction), compact (bool, optionnel) */
+/* Attend : resolved (résultat de resolveDecklist), thumb (fonction), compact (bool, optionnel),
+   highlight (optionnel : { [nom en minuscules]: 'in' | 'out' } → badge sur la vignette, ex. side deck) */
 const isCompact = typeof compact !== 'undefined' && compact;
+const hl = typeof highlight !== 'undefined' && highlight ? highlight : null;
+const mark = (line) => (hl ? hl[(line.card ? line.card.name : line.name).toLowerCase()] || null : null);
 %>
 <% if (resolved.empty) { %>
   <div class="deck-view-empty muted">Colle ta decklist pour voir le deck apparaître ici.</div>
@@ -37,9 +40,11 @@ const isCompact = typeof compact !== 'undefined' && compact;
         <div class="card-grid<%= s.key === 'battlefields' ? ' card-grid-landscape' : '' %>">
           <% for (const line of s.cards) { %>
             <% if (line.card && line.card.image) { %>
-              <a href="<%= line.card.image %>" target="_blank" rel="noopener" class="card-thumb" data-full="<%= line.card.image %>" title="<%= line.card.name %> · <%= line.card.publicCode %>">
+              <% const m = mark(line); %>
+              <a href="<%= line.card.image %>" target="_blank" rel="noopener" class="card-thumb<%= m ? ' card-sided card-sided-' + m : '' %>" data-full="<%= line.card.image %>" title="<%= line.card.name %> · <%= line.card.publicCode %><%= m === 'in' ? ' · entrée par side' : m === 'out' ? ' · sortie par side' : '' %>">
                 <img src="<%= thumb(line.card.image, s.key === 'battlefields' ? 400 : 250) %>" alt="<%= line.card.name %>" loading="lazy">
                 <span class="qty">×<%= line.qty %></span>
+                <% if (m) { %><span class="sided-badge"><%= m === 'in' ? 'IN' : 'OUT' %></span><% } %>
               </a>
             <% } else { %>
               <div class="card-thumb card-unknown" title="Carte non reconnue dans le catalogue">

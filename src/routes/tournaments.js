@@ -4,7 +4,7 @@ import { requireAuth, flashAndRedirect, isAdmin } from '../middleware.js';
 import { AUTO_CLOSE_DAYS } from '../housekeeping.js';
 import { computeStandings, pairRound, suggestedRounds, winsNeeded } from '../swiss.js';
 import { currentVersion, playedVersion, ensureVersioned } from '../deckversions.js';
-import { resolveDecklist, parseDecklist, cardImageByName } from '../cards.js';
+import { resolveDecklist, parseDecklist, cardImageByName, applySiding, thumb } from '../cards.js';
 import { normalizeEmail, isEmail, findOrCreateGuest, newInviteToken, versionAtDate, setPlayedDeck } from '../guests.js';
 import { sendMail, inviteMail, absoluteUrl, mailConfigured } from '../mailer.js';
 
@@ -372,7 +372,20 @@ async function deckLinesFor(db, player) {
   }
   const resolved = resolveDecklist(version.cards || '');
   const lines = (key) => (resolved.sections.find((s) => s.key === key)?.cards || []).map((l) => ({ name: l.card ? l.card.name : l.name, qty: l.qty, image: l.card?.image || null }));
-  return { main: lines('main'), sideboard: lines('sideboard') };
+  return { main: lines('main'), sideboard: lines('sideboard'), text: version.cards || '' };
+}
+
+// Deck d'un joueur tel qu'il est après son side : cartes entrées dans le principal,
+// sorties en réserve, avec les changements marqués pour la vue deck.
+async function sidedDeckFor(db, player, sd) {
+  const lines = await deckLinesFor(db, player);
+  if (!lines) return null;
+  const resolved = resolveDecklist(applySiding(lines.text, sd));
+  const highlight = {};
+  for (const c of sd.in || []) highlight[c.name.toLowerCase()] = 'in';
+  for (const c of sd.out || []) highlight[c.name.toLowerCase()] = 'out';
+  const count = (key) => resolved.sections.find((s) => s.key === key)?.count || 0;
+  return { resolved, highlight, mainCount: count('main'), sideCount: count('sideboard') };
 }
 
 router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res, next) => {
@@ -386,6 +399,12 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
     const viewer = req.session.user;
     const me = viewer ? [match.p1, match.p2].find((p) => String(p.userId) === viewer.id) || null : null;
     const siding = match.siding || {};
+    const visible = { p1: sidingVisible(tournament, match.p1.userId, viewer), p2: sidingVisible(tournament, match.p2.userId, viewer) };
+    const sidedDecks = {};
+    for (const side of ['p1', 'p2']) {
+      const sd = siding[String(match[side].userId)];
+      if (sd && visible[side] && (sd.out.length || sd.in.length)) sidedDecks[side] = await sidedDeckFor(req.db, match[side], sd);
+    }
     res.render('match', {
       tournament,
       round,
@@ -393,7 +412,9 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
       recordOf,
       canReport: canReportMatch(tournament, round, match, viewer),
       siding,
-      sidingVisible: { p1: sidingVisible(tournament, match.p1.userId, viewer), p2: sidingVisible(tournament, match.p2.userId, viewer) },
+      sidingVisible: visible,
+      sidedDecks,
+      thumb,
       me,
       myDeckLines: me ? await deckLinesFor(req.db, me) : null,
       mySiding: me ? siding[String(me.userId)] || null : null,

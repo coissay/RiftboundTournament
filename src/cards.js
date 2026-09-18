@@ -425,3 +425,36 @@ export function cardImageByName(name) {
   if (!card || !card.image) return null;
   return { image: card.image, landscape: card.type === 'battlefield' };
 }
+
+const SECTION_HEADER = { legend: 'Legend', champion: 'Champion', main: 'MainDeck', battlefields: 'Battlefields', runes: 'Runes', sideboard: 'Sideboard' };
+
+/** Recompose un texte de decklist à partir des sections de parseDecklist (lignes « qty nom »). */
+export function serializeDecklist(sections) {
+  return sections
+    .filter((s) => s.cards.length > 0)
+    .map((s) => `${SECTION_HEADER[s.key] || s.key}:\n` + s.cards.map((c) => `${c.qty} ${c.name}`).join('\n'))
+    .join('\n\n');
+}
+
+/**
+ * Applique un side deck à une decklist : `out` quitte le deck principal pour la réserve,
+ * `in` quitte la réserve pour le deck principal. Renvoie le nouveau texte.
+ */
+export function applySiding(text, { out = [], in: inn = [] }) {
+  const sections = parseDecklist(text);
+  const get = (key) => sections.find((s) => s.key === key).cards;
+  const move = (from, to, list) => {
+    for (const c of list) {
+      const src = from.find((l) => normalizeName(l.name) === normalizeName(c.name));
+      const qty = Math.min(c.qty, src ? src.qty : c.qty);
+      if (src) src.qty -= qty;
+      const dst = to.find((l) => normalizeName(l.name) === normalizeName(c.name));
+      if (dst) dst.qty += qty;
+      else to.push({ qty, name: src ? src.name : c.name });
+    }
+    for (let i = from.length - 1; i >= 0; i--) if (from[i].qty <= 0) from.splice(i, 1);
+  };
+  move(get('main'), get('sideboard'), out);
+  move(get('sideboard'), get('main'), inn);
+  return serializeDecklist(sections);
+}

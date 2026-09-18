@@ -101,6 +101,16 @@
             </div>
           </div>
           <% if (sd.note) { %><p class="siding-note"><%= sd.note %></p><% } %>
+          <% const sdk = sidedDecks[side]; %>
+          <% if (sdk) { %>
+            <details class="sided-deck">
+              <summary class="btn btn-ghost btn-small">🃏 Voir le deck après side <span class="muted">(principal <%= sdk.mainCount %> · réserve <%= sdk.sideCount %>)</span></summary>
+              <div class="sided-deck-view">
+                <p class="muted">Composition jouée après les échanges : <span class="sided-badge sided-badge-inline sided-in">IN</span> entrée dans le deck principal, <span class="sided-badge sided-badge-inline sided-out">OUT</span> sortie en réserve.</p>
+                <%- include('partials/deck-view', { resolved: sdk.resolved, thumb, compact: true, highlight: sdk.highlight }) %>
+              </div>
+            </details>
+          <% } %>
           <p class="muted">Mis à jour le <%= sd.updatedAt.toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) %></p>
         <% } %>
       </div>
