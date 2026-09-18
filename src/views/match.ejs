@@ -34,9 +34,23 @@ const myNextOpp = myNext && !myNext.bye ? (String(myNext.p1.userId) === me0 ? my
       <% } else { %>— les pairings sont affichés sur la page du tournoi.<% } %>
     </span>
     <span class="spacer"></span>
-    <% if (myNext && !myNext.bye) { %><a href="<%= tUrl %>/rounds/<%= newerRound.number %>/tables/<%= myNext.table %>" class="btn btn-gold">⚔️ Aller à ma table</a><% } %>
-    <a href="<%= tUrl %>" class="btn <%= myNext && !myNext.bye ? 'btn-ghost' : 'btn-gold' %>">Voir les pairings</a>
+    <% if (myNext && !myNext.bye) { %>
+      <a href="<%= tUrl %>/rounds/<%= newerRound.number %>/tables/<%= myNext.table %>" class="btn btn-gold" id="go-next-table">⚔️ Aller à ma table <span class="muted next-countdown" id="next-countdown">(5 s)</span></a>
+      <button type="button" class="btn btn-ghost btn-small" id="stay-here">Rester ici</button>
+    <% } else { %>
+      <a href="<%= tUrl %>" class="btn btn-gold">Voir les pairings</a>
+    <% } %>
   </div>
+  <% if (myNext && !myNext.bye) { %>
+  <script>
+    // Redirection automatique vers ma nouvelle table après un court décompte (annulable).
+    (function () {
+      var link = document.getElementById('go-next-table'), cd = document.getElementById('next-countdown'), stay = document.getElementById('stay-here');
+      var left = 5, timer = setInterval(function () { left -= 1; if (left <= 0) { clearInterval(timer); location.href = link.href; } else cd.textContent = '(' + left + ' s)'; }, 1000);
+      stay.addEventListener('click', function () { clearInterval(timer); cd.remove(); stay.remove(); });
+    })();
+  </script>
+  <% } %>
 <% } else if (tournament.status === 'terminé') { %>
   <div class="callout match-status callout-gold" role="status">
     <span class="callout-icon" aria-hidden="true">🏆</span>

@@ -972,3 +972,4 @@ body.table-mode .match-status { display: none !important; }
 body.table-mode .match-table-tile { display: flex !important; }
 body.table-mode .match-table-tile .my-match-table b { font-size: 3.4rem; }
 body.table-mode .match-table-sub { display: none; }
+.next-countdown { font-size: 0.8rem; font-weight: 500; color: inherit; opacity: 0.8; }
