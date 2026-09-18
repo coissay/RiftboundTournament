@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { gamesOf } from '../swiss.js';
+import { playedVersion } from '../deckversions.js';
 
 const router = Router();
 
@@ -11,6 +12,7 @@ router.get('/stats', async (req, res, next) => {
 
     const playerStats = new Map(); // userId → stats
     const deckStats = new Map(); // deckId (ou nom) → stats
+    const versionStats = new Map(); // `${deckId}::v${n}` → stats de cette version du deck
 
     const bump = (map, key, seed, outcome, games) => {
       if (!map.has(key)) {
@@ -38,15 +40,21 @@ router.get('/stats', async (req, res, next) => {
           ];
           for (const { p, outcome, games } of sides) {
             bump(playerStats, String(p.userId), { username: p.username, userId: String(p.userId) }, outcome, games);
+            if (!p.deckId && !p.deckName) continue; // invité sans deck renseigné : stats joueur seulement
             const deckKey = p.deckId ? String(p.deckId) : `${p.username}::${p.deckName}`;
-            bump(deckStats, deckKey, { deckName: p.deckName, ownerName: p.username, ownerId: String(p.userId) }, outcome, games);
+            const seed = { deckName: p.deckName, ownerName: p.username, ownerId: String(p.userId), deckId: p.deckId ? String(p.deckId) : null };
+            bump(deckStats, deckKey, seed, outcome, games);
+            if (p.deckId) bump(versionStats, `${deckKey}::v${playedVersion(p)}`, { ...seed, version: playedVersion(p) }, outcome, games);
           }
         }
       }
       if (t.winner) {
         bump(playerStats, String(t.winner.userId), { username: t.winner.username, userId: String(t.winner.userId) }, null).cups += 1;
+        if (!t.winner.deckId && !t.winner.deckName) continue;
         const deckKey = t.winner.deckId ? String(t.winner.deckId) : `${t.winner.username}::${t.winner.deckName}`;
-        bump(deckStats, deckKey, { deckName: t.winner.deckName, ownerName: t.winner.username, ownerId: String(t.winner.userId) }, null).cups += 1;
+        const seed = { deckName: t.winner.deckName, ownerName: t.winner.username, ownerId: String(t.winner.userId), deckId: t.winner.deckId ? String(t.winner.deckId) : null };
+        bump(deckStats, deckKey, seed, null).cups += 1;
+        if (t.winner.deckId) bump(versionStats, `${deckKey}::v${playedVersion(t.winner)}`, { ...seed, version: playedVersion(t.winner) }, null).cups += 1;
       }
     }
 
@@ -59,7 +67,11 @@ router.get('/stats', async (req, res, next) => {
           : 0,
     });
     const players = [...playerStats.values()].map(withRate).sort((a, b) => b.cups - a.cups || b.winRate - a.winRate || b.matches - a.matches);
-    const decks = [...deckStats.values()].map(withRate).sort((a, b) => b.cups - a.cups || b.winRate - a.winRate || b.matches - a.matches);
+    const versions = [...versionStats.values()].map(withRate);
+    const decks = [...deckStats.values()]
+      .map(withRate)
+      .map((d) => ({ ...d, versions: d.deckId ? versions.filter((v) => v.deckId === d.deckId).sort((a, b) => b.version - a.version) : [] }))
+      .sort((a, b) => b.cups - a.cups || b.winRate - a.winRate || b.matches - a.matches);
 
     res.render('stats', { players, decks });
   } catch (err) {

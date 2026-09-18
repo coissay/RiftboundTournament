@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { oid } from '../db.js';
 import { gamesOf } from '../swiss.js';
+import { tournamentsMissingDeck } from '../guests.js';
+import { computeStats as computeFreePlayStats, outcomeForSide, sideName, countsForStats, FORMATS } from '../freeplay.js';
 
 const router = Router();
 
@@ -105,9 +107,32 @@ router.get('/players/:id', async (req, res, next) => {
       ? { email: user.locator.email, connectedAt: user.locator.connectedAt, lastImportAt: user.locator.lastImportAt || null, stats: user.locator.stats || null }
       : null;
 
+    // Free play : section à part, avec bilan par format et historique des matchs.
+    const freeMatches = await req.db.collection('free_matches').find({ 'sides.players.userId': user._id }).sort({ date: -1 }).toArray();
+    const freeStats = computeFreePlayStats(freeMatches);
+    const freePlay = {
+      summary: freeStats.players.find((p) => p.userId === userId) || null,
+      perFormat: Object.fromEntries(
+        Object.keys(FORMATS).map((f) => [f, computeFreePlayStats(freeMatches, { format: f }).players.find((p) => p.userId === userId) || null])
+      ),
+      history: freeMatches.map((m) => {
+        const mySide = m.sides.findIndex((s) => s.players.some((p) => String(p.userId) === userId));
+        const me = m.sides[mySide].players.find((p) => String(p.userId) === userId);
+        const o = countsForStats(m) ? outcomeForSide(m, mySide) : null;
+        return {
+          id: m._id, date: m.date, format: m.format, status: m.status, myDeck: me.deckName,
+          teammates: m.sides[mySide].players.filter((p) => String(p.userId) !== userId),
+          opponents: m.sides.filter((s, i) => i !== mySide).map((s) => ({ name: sideName(s), players: s.players })),
+          score: o ? `${o.won}-${o.lost}${o.drawn ? ' (+' + o.drawn + 'N)' : ''}` : null,
+          outcome: o ? o.outcome : null,
+        };
+      }),
+    };
+
+    const missingDeck = isMe ? await tournamentsMissingDeck(req.db, user._id) : [];
     res.render('player', {
       player: user, summary, cups, history, tournamentCount: tournaments.length,
-      externalEvents, external, isMe, myDecks, locatorInfo,
+      externalEvents, external, isMe, myDecks, locatorInfo, freePlay, FORMATS, missingDeck,
     });
   } catch (err) {
     next(err);

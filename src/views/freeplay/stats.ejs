@@ -1,0 +1,108 @@
+<%- include('../partials/head', { title: 'Statistiques free play' }) %>
+
+<div class="page-head">
+  <div>
+    <h1>Statistiques free play</h1>
+    <p class="muted">Matchs free play clôturés uniquement, à part des tournois. Un nul compte pour une demi-victoire dans le win rate.</p>
+  </div>
+  <a href="/stats" class="btn btn-ghost">Stats tournois →</a>
+</div>
+
+<%- include('_nav', { section: 'stats' }) %>
+
+<div class="format-filter">
+  <a href="/free-play/stats" class="chip <%= !format ? 'active' : '' %>">Tous <span class="muted">(<%= stats.total %>)</span></a>
+  <% for (const [key, spec] of Object.entries(FORMATS)) { %>
+    <a href="/free-play/stats?format=<%= key %>" class="chip <%= format === key ? 'active' : '' %>"><%= spec.label %> <span class="muted">(<%= stats.byFormat[key] || 0 %>)</span></a>
+  <% } %>
+</div>
+
+<% const fmtRate = (r) => (r * 100).toFixed(1) + '%'; %>
+<% const rateBar = (r) => `<div class="rate-bar"><div class="rate-fill" style="width: ${(r * 100).toFixed(0)}%"></div></div>`; %>
+
+<div class="stats-grid">
+  <div class="card">
+    <h2>👤 Joueurs</h2>
+    <% if (stats.players.length === 0) { %><div class="empty">Aucun match clôturé pour l'instant.</div><% } else { %>
+    <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Joueur</th><th>Matchs</th><% if (!format) { %><th><%= Object.values(FORMATS).map(f => f.label).join(' / ') %></th><% } %><th>V-N-D</th><th>Manches</th><th>Win rate</th><th>GW%</th></tr></thead>
+      <tbody>
+      <% for (const p of stats.players) { %>
+        <tr>
+          <td><a href="/players/<%= p.userId %>"><strong><%= p.username %></strong></a></td>
+          <td><%= p.matches %></td>
+          <% if (!format) { %><td class="muted"><%= Object.keys(FORMATS).map(f => p.perFormat[f] || 0).join(' / ') %></td><% } %>
+          <td><%= p.wins %>-<%= p.draws %>-<%= p.losses %></td>
+          <td><%= p.gameWins %>-<%= p.gameDraws %>-<%= p.gameLosses %></td>
+          <td><%- rateBar(p.winRate) %><%= fmtRate(p.winRate) %></td>
+          <td><%= fmtRate(p.gameWinRate) %></td>
+        </tr>
+      <% } %>
+      </tbody>
+    </table>
+    </div>
+    <% } %>
+  </div>
+
+  <% if (!format || format === '2v2') { %>
+  <div class="card">
+    <h2>🤝 Duos <span class="muted">(2v2)</span></h2>
+    <% if (stats.duos.length === 0) { %><div class="empty">Aucun match 2v2 clôturé pour l'instant.</div><% } else { %>
+    <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Duo</th><th>Matchs</th><th>V-N-D</th><th>Manches</th><th>Win rate</th></tr></thead>
+      <tbody>
+      <% for (const d of stats.duos) { %>
+        <tr>
+          <td><% d.members.forEach((m, i) => { %><% if (i > 0) { %> &amp; <% } %><a href="/players/<%= m.userId %>"><strong><%= m.username %></strong></a><% }) %></td>
+          <td><%= d.matches %></td>
+          <td><%= d.wins %>-<%= d.draws %>-<%= d.losses %></td>
+          <td><%= d.gameWins %>-<%= d.gameDraws %>-<%= d.gameLosses %></td>
+          <td><%- rateBar(d.winRate) %><%= fmtRate(d.winRate) %></td>
+        </tr>
+      <% } %>
+      </tbody>
+    </table>
+    </div>
+    <% } %>
+  </div>
+  <% } %>
+
+  <div class="card">
+    <h2>🃏 Decks</h2>
+    <% if (stats.decks.length === 0) { %><div class="empty">Aucun match clôturé avec un deck renseigné.</div><% } else { %>
+    <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Deck</th><th>Joueur</th><th>Matchs</th><th>V-N-D</th><th>Manches</th><th>Win rate</th><th>GW%</th></tr></thead>
+      <tbody>
+      <% for (const d of stats.decks) { %>
+        <tr>
+          <td><strong><% if (d.deckId && currentUser) { %><a href="/decks/<%= d.deckId %>"><%= d.deckName %></a><% } else { %><%= d.deckName %><% } %></strong><% if (d.versions.length > 1) { %> <span class="muted">(<%= d.versions.length %> versions)</span><% } %></td>
+          <td class="muted"><a href="/players/<%= d.ownerId %>"><%= d.ownerName %></a></td>
+          <td><%= d.matches %></td>
+          <td><%= d.wins %>-<%= d.draws %>-<%= d.losses %></td>
+          <td><%= d.gameWins %>-<%= d.gameDraws %>-<%= d.gameLosses %></td>
+          <td><%- rateBar(d.winRate) %><%= fmtRate(d.winRate) %></td>
+          <td><%= fmtRate(d.gameWinRate) %></td>
+        </tr>
+        <% if (d.versions.length > 1) { for (const v of d.versions) { %>
+          <tr class="row-version">
+            <td class="muted">↳ <a href="/decks/<%= d.deckId %>/versions/<%= v.version %>" class="version-chip">v<%= v.version %></a></td>
+            <td></td>
+            <td><%= v.matches %></td>
+            <td><%= v.wins %>-<%= v.draws %>-<%= v.losses %></td>
+            <td><%= v.gameWins %>-<%= v.gameDraws %>-<%= v.gameLosses %></td>
+            <td><%= fmtRate(v.winRate) %></td>
+            <td><%= fmtRate(v.gameWinRate) %></td>
+          </tr>
+        <% } } %>
+      <% } %>
+      </tbody>
+    </table>
+    </div>
+    <% } %>
+  </div>
+</div>
+
+<%- include('../partials/foot') %>

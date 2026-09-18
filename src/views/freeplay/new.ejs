@@ -1,0 +1,46 @@
+<%- include('../partials/head', { title: 'Nouveau match free play' }) %>
+
+<p><a href="/free-play" class="muted">← Free play</a></p>
+
+<div class="card card-medium">
+  <h1>Nouveau match free play</h1>
+  <form method="post" action="/free-play/new" id="fp-form">
+    <label>Format
+      <select name="format" id="fp-format">
+        <% for (const [key, spec] of Object.entries(FORMATS)) { %>
+          <option value="<%= key %>" <%= values.format === key ? 'selected' : '' %>><%= spec.label %> — <%= spec.description %></option>
+        <% } %>
+      </select>
+    </label>
+    <label>Format des manches
+      <select name="bestOf">
+        <option value="1" <%= values.bestOf == 1 ? 'selected' : '' %>>Best of 1 (une manche sèche)</option>
+        <option value="3" <%= values.bestOf == 3 ? 'selected' : '' %>>Best of 3 (2 manches gagnantes)</option>
+        <option value="5" <%= values.bestOf == 5 ? 'selected' : '' %>>Best of 5 (3 manches gagnantes)</option>
+      </select>
+    </label>
+    <label>Date et heure <input type="datetime-local" name="date"></label>
+
+    <div id="fp-slots"></div>
+    <p class="form-hint muted">Le deck est facultatif, mais sans deck le match ne compte pas dans les stats par deck.</p>
+
+    <label>Note <input name="notes" maxlength="500" placeholder="ex : pause déj, test du nouveau deck…"></label>
+
+    <div class="row-actions">
+      <button class="btn btn-gold">Créer le match</button>
+      <a href="/free-play" class="btn btn-ghost">Annuler</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  window.FP_FORM = {
+    formats: <%- JSON.stringify(Object.fromEntries(Object.entries(FORMATS).map(([k, s]) => [k, { sides: s.sides, perSide: s.perSide }]))) %>,
+    users: <%- JSON.stringify(users) %>,
+    decksByOwner: <%- JSON.stringify(decksByOwner) %>,
+    me: <%- JSON.stringify(currentUser ? currentUser.id : null) %>,
+  };
+</script>
+<script src="/freeplay-form.js"></script>
+
+<%- include('../partials/foot') %>

@@ -1,0 +1,113 @@
+<%- include('../partials/head', { title: `Match ${spec.label} — Free play` }) %>
+
+<p><a href="/free-play" class="muted">← Free play</a></p>
+
+<div class="card match-card">
+  <p class="muted match-meta">
+    Free play <%= spec.label %> · Bo<%= match.bestOf || 1 %>
+    · <%= match.date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) %>
+    à <%= match.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) %>
+    · créé par <%= match.creatorName %>
+    <% if (match.notes) { %><br><%= match.notes %><% } %>
+  </p>
+
+  <% const need = Math.ceil((match.bestOf || 1) / 2); %>
+  <div class="versus versus-<%= spec.sides %>">
+    <% match.sides.forEach((side, i) => { %>
+      <% if (i > 0) { %>
+        <div class="versus-center">
+          <% if (spec.sides === 2) { %>
+            <div class="versus-score"><%= games.wins[0] %> — <%= games.wins[1] %></div>
+            <% if (games.draws) { %><div class="muted"><%= games.draws %> manche<%= games.draws > 1 ? 's' : '' %> nulle<%= games.draws > 1 ? 's' : '' %></div><% } %>
+          <% } %>
+          <div class="versus-vs">VS</div>
+        </div>
+      <% } %>
+      <div class="versus-side <%= match.result === i && decided ? 'versus-winner' : '' %>">
+        <% if (spec.perSide > 1) { %><span class="muted fp-team-label"><%= i === 0 ? 'Équipe A' : 'Équipe B' %></span><% } %>
+        <% for (const p of side.players) { %>
+          <div class="fp-player">
+            <a class="versus-name" href="/players/<%= p.userId %>"><%= p.username %></a>
+            <span class="muted">(<%= recordOf[String(p.userId)] || '0-0-0' %>)</span>
+            <% if (p.deckName) { %>
+              <span class="muted deck-tag"><% if (p.deckId && currentUser) { %><a href="/decks/<%= p.deckId %>"><%= p.deckName %></a><% } else { %><%= p.deckName %><% } %></span>
+            <% } else { %>
+              <span class="muted deck-tag"><em>sans deck</em></span>
+            <% } %>
+          </div>
+        <% } %>
+        <% if (spec.sides > 2) { %><span class="fp-side-score"><%= games.wins[i] %></span><% } %>
+      </div>
+    <% }) %>
+  </div>
+
+  <% if (spec.sides > 2 && games.draws) { %><p class="muted match-meta"><%= games.draws %> manche<%= games.draws > 1 ? 's' : '' %> nulle<%= games.draws > 1 ? 's' : '' %></p><% } %>
+
+  <% if (games.played > 0) { %>
+    <div class="manche-history">
+      <% match.gameResults.forEach((r, i) => { %>
+        <div class="manche-line">
+          <span class="muted">Manche <%= i + 1 %></span>
+          <% if (r === 'draw') { %><span class="result-chip draw">Nul</span>
+          <% } else { %><span class="result-chip win">Victoire <%= sideName(match.sides[r]) %></span><% } %>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+
+  <% if (canReport && !decided) { %>
+    <div class="manche-report">
+      <p class="manche-title">Manche <%= games.played + 1 %> — qui l'emporte ?</p>
+      <div class="report-buttons report-buttons-<%= spec.sides %>">
+        <% match.sides.forEach((side, i) => { %>
+          <form method="post" action="/free-play/<%= match._id %>/games">
+            <input type="hidden" name="gameResult" value="<%= i %>">
+            <button class="btn btn-report <%= i === 0 ? 'btn-win-left' : i === match.sides.length - 1 ? 'btn-win-right' : 'btn-win-mid' %>"><%= sideName(side) %><span>Victoire</span></button>
+          </form>
+        <% }) %>
+        <form method="post" action="/free-play/<%= match._id %>/games">
+          <input type="hidden" name="gameResult" value="draw">
+          <button class="btn btn-report btn-draw-mid">Nul<span>Égalité</span></button>
+        </form>
+      </div>
+      <p class="muted">Première à <%= need %> manche<%= need > 1 ? 's' : '' %> gagnée<%= need > 1 ? 's' : '' %>. Le match se clôture tout seul une fois décidé ; sinon, « Clôturer au score » enregistre le score en l'état.</p>
+    </div>
+  <% } %>
+
+  <% if (match.status === 'terminé') { %>
+    <div class="cup-banner match-final">
+      <% if (match.result === 'draw') { %>Match nul <%= games.wins.join('-') %>
+      <% } else if (match.result === null || match.result === undefined) { %>Match clôturé sans manche jouée
+      <% } else { %>🎉 <strong><%= sideName(match.sides[match.result]) %></strong> remporte le match <%= games.wins[match.result] %>-<%= games.wins.filter((w, i) => i !== match.result).join('-') %><% } %>
+    </div>
+  <% } else if (!canReport) { %>
+    <p class="muted">Seuls les participants ou le créateur du match peuvent saisir le résultat<%= currentUser ? '' : ' — connecte-toi' %>.</p>
+  <% } %>
+
+  <% if (currentUser && (canReport || owner || match.status === 'terminé')) { %>
+    <div class="row-actions fp-actions">
+      <% if (canReport && games.played > 0 && !decided) { %>
+        <form method="post" action="/free-play/<%= match._id %>/finish" class="inline" onsubmit="return confirm('Clôturer le match au score en l\'état ?')">
+          <button class="btn btn-ghost btn-small">🏁 Clôturer au score</button>
+        </form>
+      <% } %>
+      <% if (canReport && games.played > 0) { %>
+        <form method="post" action="/free-play/<%= match._id %>/reset" class="inline" onsubmit="return confirm('Effacer toutes les manches saisies pour ce match ?')">
+          <button class="btn btn-ghost btn-small">↺ Réinitialiser la saisie</button>
+        </form>
+      <% } %>
+      <% if (match.status === 'terminé' && (owner || match.sides.some(s => s.players.some(p => String(p.userId) === currentUser.id)))) { %>
+        <form method="post" action="/free-play/<%= match._id %>/reopen" class="inline">
+          <button class="btn btn-ghost btn-small">↺ Rouvrir le match</button>
+        </form>
+      <% } %>
+      <% if (owner) { %>
+        <form method="post" action="/free-play/<%= match._id %>/delete" class="inline" onsubmit="return confirm('Supprimer définitivement ce match ?')">
+          <button class="btn btn-danger btn-small">Supprimer</button>
+        </form>
+      <% } %>
+    </div>
+  <% } %>
+</div>
+
+<%- include('../partials/foot') %>

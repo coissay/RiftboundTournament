@@ -7,6 +7,7 @@ import { connect, MONGO_URL, DB_NAME } from './db.js';
 import { initCatalog } from './cards.js';
 import { isAdmin } from './middleware.js';
 import { startHousekeeping } from './housekeeping.js';
+import { migrateDecks } from './deckversions.js';
 import authRoutes from './routes/auth.js';
 import deckRoutes from './routes/decks.js';
 import deckbuilderRoutes from './routes/deckbuilder.js';
@@ -14,12 +15,14 @@ import tournamentRoutes from './routes/tournaments.js';
 import statsRoutes from './routes/stats.js';
 import playerRoutes from './routes/players.js';
 import locatorRoutes from './routes/locator.js';
+import freeplayRoutes from './routes/freeplay.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
 const db = await connect();
 await initCatalog(db); // catalogue de cartes Riftbound (API galerie officielle, cache Mongo)
+await migrateDecks(db); // decks d'avant les versions : v1 = cartes actuelles
 
 const app = express();
 app.set('view engine', 'ejs');
@@ -51,6 +54,7 @@ app.use(authRoutes);
 app.use(deckRoutes);
 app.use(deckbuilderRoutes);
 app.use(tournamentRoutes);
+app.use(freeplayRoutes);
 app.use(statsRoutes);
 app.use(playerRoutes);
 app.use(locatorRoutes);

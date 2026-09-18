@@ -3,7 +3,7 @@
 <div class="page-head">
   <div>
     <h1><%= deck.name %></h1>
-    <p class="muted">par <a href="/players/<%= deck.ownerId %>"><%= deck.ownerName %></a></p>
+    <p class="muted">par <a href="/players/<%= deck.ownerId %>"><%= deck.ownerName %></a> · <span class="version-chip">v<%= currentVersion %></span><% if (versions.length > 1) { %> · <%= versions.length %> versions<% } %></p>
   </div>
   <div class="row-actions">
     <% if (isOwner) { %><a href="/deckbuilder?deck=<%= deck._id %>" class="btn btn-ghost">Ouvrir dans le deckbuilder</a><a href="/decks/<%= deck._id %>/edit" class="btn btn-ghost">Modifier</a><% } %>
@@ -23,6 +23,39 @@
       <button class="btn btn-ghost btn-small" type="button" onclick="navigator.clipboard.writeText(document.getElementById('raw-decklist').textContent).then(()=>{this.textContent='Copié !'})">Copier</button>
     </div>
   </aside>
+</div>
+
+<div class="card">
+  <h2>🕓 Historique des versions</h2>
+  <p class="muted">Une version est créée à chaque modification des cartes : ajouts (+), retraits (−) et déplacements (⇄) entre deck principal et réserve. Les stats sont celles des matchs joués avec cette version précise (tournois : matchs hors bye · free play : matchs clôturés).</p>
+  <div class="version-list">
+  <% for (const v of versions) { const st = versionStats[v.version]; %>
+    <div class="version-item <%= v.version === currentVersion ? 'version-current' : '' %>">
+      <div class="version-head">
+        <span class="version-chip">v<%= v.version %></span>
+        <span class="muted"><%= v.createdAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) %></span>
+        <% if (v.version === currentVersion) { %><span class="badge badge-live">Version actuelle</span><% } else { %><a href="/decks/<%= deck._id %>/versions/<%= v.version %>" class="muted">voir la liste →</a><% } %>
+      </div>
+      <% if (v.diff) { %>
+        <div class="version-diff">
+          <% for (const c of v.diff.added) { %><span class="diff-chip diff-add">+<%= c.qty %> <%= c.name %><% if (c.section !== 'main') { %> <span class="muted">(<%= c.sectionLabel %>)</span><% } %></span><% } %>
+          <% for (const c of v.diff.removed) { %><span class="diff-chip diff-del">−<%= c.qty %> <%= c.name %><% if (c.section !== 'main') { %> <span class="muted">(<%= c.sectionLabel %>)</span><% } %></span><% } %>
+          <% for (const c of (v.diff.moved || [])) { %><span class="diff-chip diff-move">⇄ <%= c.qty %> <%= c.name %> <span class="muted"><%= c.fromLabel %> → <%= c.toLabel %></span></span><% } %>
+        </div>
+      <% } else { %>
+        <div class="muted">Version initiale.</div>
+      <% } %>
+      <div class="version-stats">
+        <% if (st && st.tournois.matches) { %>
+          <span>🏆 Tournois : <strong><%= st.tournois.wins %>-<%= st.tournois.draws %>-<%= st.tournois.losses %></strong> (<%= (st.tournois.winRate * 100).toFixed(0) %>%)<%= st.tournois.cups ? ' · ' + '🏆'.repeat(Math.min(st.tournois.cups, 5)) : '' %></span>
+        <% } else { %><span class="muted">🏆 Tournois : aucun match</span><% } %>
+        <% if (st && st.freeplay.matches) { %>
+          <span>🎲 Free play : <strong><%= st.freeplay.wins %>-<%= st.freeplay.draws %>-<%= st.freeplay.losses %></strong> (<%= (st.freeplay.winRate * 100).toFixed(0) %>%)</span>
+        <% } else { %><span class="muted">🎲 Free play : aucun match</span><% } %>
+      </div>
+    </div>
+  <% } %>
+  </div>
 </div>
 
 <%- include('partials/foot') %>

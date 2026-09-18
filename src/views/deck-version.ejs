@@ -1,0 +1,35 @@
+<%- include('partials/head', { title: `${deck.name} — v${version.version}` }) %>
+
+<div class="page-head">
+  <div>
+    <h1><%= deck.name %> <span class="version-chip">v<%= version.version %></span></h1>
+    <p class="muted">Liste du <%= version.createdAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) %><%= isCurrent ? ' (version actuelle)' : ' — version passée, le deck a changé depuis' %> · par <a href="/players/<%= deck.ownerId %>"><%= deck.ownerName %></a></p>
+  </div>
+  <a href="/decks/<%= deck._id %>" class="btn btn-ghost">← Fiche du deck</a>
+</div>
+
+<% if (version.diff) { %>
+  <div class="card">
+    <h2>Changements par rapport à la v<%= version.version - 1 %></h2>
+    <div class="version-diff">
+      <% for (const c of version.diff.added) { %><span class="diff-chip diff-add">+<%= c.qty %> <%= c.name %><% if (c.section !== 'main') { %> <span class="muted">(<%= c.sectionLabel %>)</span><% } %></span><% } %>
+      <% for (const c of version.diff.removed) { %><span class="diff-chip diff-del">−<%= c.qty %> <%= c.name %><% if (c.section !== 'main') { %> <span class="muted">(<%= c.sectionLabel %>)</span><% } %></span><% } %>
+          <% for (const c of (version.diff.moved || [])) { %><span class="diff-chip diff-move">⇄ <%= c.qty %> <%= c.name %> <span class="muted"><%= c.fromLabel %> → <%= c.toLabel %></span></span><% } %>
+    </div>
+  </div>
+<% } %>
+
+<div class="deck-detail">
+  <div class="card deck-detail-view">
+    <%- include('partials/deck-view', { resolved, thumb }) %>
+  </div>
+  <aside class="deck-detail-side">
+    <div class="card">
+      <h2>Decklist v<%= version.version %></h2>
+      <pre class="decklist" id="raw-decklist"><%= version.cards %></pre>
+      <button class="btn btn-ghost btn-small" type="button" onclick="navigator.clipboard.writeText(document.getElementById('raw-decklist').textContent).then(()=>{this.textContent='Copié !'})">Copier</button>
+    </div>
+  </aside>
+</div>
+
+<%- include('partials/foot') %>

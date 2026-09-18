@@ -3,6 +3,10 @@ import { oid } from '../db.js';
 import { requireAuth, flashAndRedirect, isAdmin } from '../middleware.js';
 import { AUTO_CLOSE_DAYS } from '../housekeeping.js';
 import { computeStandings, pairRound, suggestedRounds, winsNeeded } from '../swiss.js';
+import { currentVersion, playedVersion, ensureVersioned } from '../deckversions.js';
+import { resolveDecklist, parseDecklist } from '../cards.js';
+import { normalizeEmail, isEmail, findOrCreateGuest, newInviteToken, versionAtDate, setPlayedDeck } from '../guests.js';
+import { sendMail, inviteMail, absoluteUrl, mailConfigured } from '../mailer.js';
 
 const router = Router();
 
@@ -81,12 +85,25 @@ router.get('/tournaments/:id', async (req, res, next) => {
         .toArray();
     }
     const activePlayers = (tournament.players || []).filter((p) => !p.dropped);
+    const organizer = isOrganizer(tournament, req.session.user);
+    // Invités (compte non réclamé) : l'organisateur voit l'e-mail et le lien d'invitation.
+    const guestInfo = {};
+    if (organizer && tournament.players.length) {
+      const guests = await req.db.collection('users').find({ _id: { $in: tournament.players.map((p) => p.userId) }, guest: true }).toArray();
+      for (const g of guests) {
+        guestInfo[String(g._id)] = { email: g.email, sentAt: g.invite?.sentAt || null, link: g.invite?.token ? absoluteUrl(req, `/register?invite=${encodeURIComponent(g.invite.token)}`) : null };
+      }
+    }
+    const me = req.session.user ? tournament.players.find((p) => String(p.userId) === req.session.user.id) : null;
     res.render('tournament', {
       tournament,
       standings,
       myDecks,
-      organizer: isOrganizer(tournament, req.session.user),
-      registered: req.session.user && tournament.players.some((p) => String(p.userId) === req.session.user.id),
+      organizer,
+      registered: !!me,
+      myDeckMissing: !!me && !me.deckId,
+      guestInfo,
+      mailConfigured: mailConfigured(),
       tab: req.query.tab || 'rondes',
       plannedRounds: suggestedRounds(activePlayers.length, tournament.durationMinutes, tournament.roundLength),
       autoCloseDays: AUTO_CLOSE_DAYS,
@@ -111,7 +128,7 @@ router.post('/tournaments/:id/join', requireAuth, async (req, res, next) => {
       // Déjà inscrit : on met juste à jour le deck choisi.
       await req.db.collection('tournaments').updateOne(
         { _id: tournament._id, 'players.userId': oid(req.session.user.id) },
-        { $set: { 'players.$.deckId': deck._id, 'players.$.deckName': deck.name } }
+        { $set: { 'players.$.deckId': deck._id, 'players.$.deckName': deck.name, 'players.$.deckVersion': currentVersion(deck) } }
       );
       return flashAndRedirect(req, res, 'success', `Deck changé pour « ${deck.name} ».`, url);
     }
@@ -124,6 +141,7 @@ router.post('/tournaments/:id/join', requireAuth, async (req, res, next) => {
             username: req.session.user.username,
             deckId: deck._id,
             deckName: deck.name,
+            deckVersion: currentVersion(deck), // version du deck au moment de l'inscription (stats par version)
             dropped: false,
           },
         },
@@ -147,6 +165,89 @@ router.post('/tournaments/:id/leave', requireAuth, async (req, res, next) => {
       .collection('tournaments')
       .updateOne({ _id: tournament._id }, { $pull: { players: { userId: oid(req.session.user.id) } } });
     flashAndRedirect(req, res, 'success', 'Désinscription effectuée.', url);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- Ajout d'un joueur invité par l'organisateur (pseudo + e-mail) ----
+// L'invité existe dans `users` sans mot de passe ; il reçoit un lien pour créer son
+// compte et conserver son historique. S'il a déjà un compte avec cet e-mail, il est
+// simplement inscrit (sans deck : il le renseignera lui-même).
+async function sendInvite(req, guest, tournament) {
+  const token = guest.invite?.token || newInviteToken();
+  const link = absoluteUrl(req, `/register?invite=${encodeURIComponent(token)}`);
+  const mail = inviteMail({ guestName: guest.username, tournamentName: tournament.name, organizerName: req.session.user.username, link });
+  const { sent } = await sendMail({ to: guest.email, ...mail });
+  await req.db.collection('users').updateOne(
+    { _id: guest._id },
+    { $set: { 'invite.token': token, 'invite.sentAt': sent ? new Date() : guest.invite?.sentAt || null, 'invite.lastTournamentId': tournament._id } }
+  );
+  return { sent, link };
+}
+
+router.post('/tournaments/:id/guests', requireAuth, async (req, res, next) => {
+  try {
+    const tournament = await loadTournament(req, res);
+    if (!tournament) return;
+    const url = `/tournaments/${tournament._id}?tab=joueurs`;
+    if (!isOrganizer(tournament, req.session.user)) return flashAndRedirect(req, res, 'error', 'Réservé à l’organisateur.', url);
+    if (tournament.status !== 'inscriptions') return flashAndRedirect(req, res, 'error', 'Les inscriptions sont closes.', url);
+    const username = String(req.body.username || '').trim().slice(0, 40);
+    const email = normalizeEmail(req.body.email);
+    if (username.length < 2) return flashAndRedirect(req, res, 'error', 'Pseudo de l’invité requis (min 2 car.).', url);
+    if (!isEmail(email)) return flashAndRedirect(req, res, 'error', 'Adresse e-mail invalide.', url);
+    const { user, created, error } = await findOrCreateGuest(req.db, { username, email });
+    if (error) return flashAndRedirect(req, res, 'error', error, url);
+    if (tournament.players.some((p) => String(p.userId) === String(user._id))) {
+      return flashAndRedirect(req, res, 'error', `${user.username} est déjà inscrit·e.`, url);
+    }
+    await req.db.collection('tournaments').updateOne(
+      { _id: tournament._id },
+      { $push: { players: { userId: user._id, username: user.username, deckId: null, deckName: null, deckVersion: null, dropped: false, addedBy: oid(req.session.user.id) } } }
+    );
+    if (!user.guest) {
+      return flashAndRedirect(req, res, 'success', `${user.username} a déjà un compte : inscrit·e au tournoi, il/elle pourra indiquer son deck.`, url);
+    }
+    const { sent, link } = await sendInvite(req, user, tournament);
+    const how = sent ? `Invitation envoyée à ${email}.` : `E-mail non configuré (SMTP_URL) : transmets-lui ce lien — ${link}`;
+    flashAndRedirect(req, res, 'success', `${user.username} ajouté·e${created ? '' : ' (invité·e déjà connu·e)'}. ${how}`, url);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/tournaments/:id/guests/:userId/invite', requireAuth, async (req, res, next) => {
+  try {
+    const tournament = await loadTournament(req, res);
+    if (!tournament) return;
+    const url = `/tournaments/${tournament._id}?tab=joueurs`;
+    if (!isOrganizer(tournament, req.session.user)) return flashAndRedirect(req, res, 'error', 'Réservé à l’organisateur.', url);
+    const guest = await req.db.collection('users').findOne({ _id: oid(req.params.userId), guest: true });
+    if (!guest || !tournament.players.some((p) => String(p.userId) === String(guest._id))) {
+      return flashAndRedirect(req, res, 'error', 'Invité introuvable sur ce tournoi (compte déjà créé ?).', url);
+    }
+    const { sent, link } = await sendInvite(req, guest, tournament);
+    flashAndRedirect(req, res, 'success', sent ? `Invitation renvoyée à ${guest.email}.` : `E-mail non configuré : lien d’invitation — ${link}`, url);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- Renseigner a posteriori le deck joué (joueur inscrit sans deck, ex-invité) ----
+router.post('/tournaments/:id/my-deck', requireAuth, async (req, res, next) => {
+  try {
+    const tournament = await loadTournament(req, res);
+    if (!tournament) return;
+    const back = req.body.back === 'player' ? `/players/${req.session.user.id}` : `/tournaments/${tournament._id}?tab=joueurs`;
+    const me = tournament.players.find((p) => String(p.userId) === req.session.user.id);
+    if (!me) return flashAndRedirect(req, res, 'error', 'Tu n’es pas inscrit·e à ce tournoi.', back);
+    if (me.deckId) return flashAndRedirect(req, res, 'error', 'Ton deck est déjà renseigné pour ce tournoi.', back);
+    const deck = await req.db.collection('decks').findOne({ _id: oid(req.body.deckId), ownerId: oid(req.session.user.id) });
+    if (!deck) return flashAndRedirect(req, res, 'error', 'Choisis un de tes decks.', back);
+    const deckVersion = await versionAtDate(req.db, deck._id, tournament.date);
+    await setPlayedDeck(req.db, tournament, req.session.user.id, deck, deckVersion);
+    flashAndRedirect(req, res, 'success', `Deck « ${deck.name} » (v${deckVersion}) enregistré pour « ${tournament.name} ».`, back);
   } catch (err) {
     next(err);
   }
@@ -249,6 +350,31 @@ function canReportMatch(tournament, round, match, user) {
   return isOrganizer(tournament, user) || [String(match.p1.userId), String(match.p2.userId)].includes(user.id);
 }
 
+// ---- Side deck : cartes échangées avec la réserve pour ce match ----
+// Chaque joueur de la table peut noter ses échanges (pendant le tournoi ou après coup).
+// Ils restent cachés à tout le monde sauf lui tant que le tournoi n'est pas clôturé.
+function sidingVisible(tournament, ownerId, viewer) {
+  if (tournament.status === 'terminé') return true;
+  return !!viewer && String(ownerId) === viewer.id;
+}
+
+// Deck principal + réserve du joueur, dans la version jouée (pour le formulaire de side deck).
+async function deckLinesFor(db, player) {
+  // Dans les appariements, deckId est une chaîne (copié depuis le classement) : on le reconvertit.
+  const deckId = oid(player.deckId);
+  if (!deckId) return null;
+  let version = await db.collection('deck_versions').findOne({ deckId, version: playedVersion(player) });
+  if (!version) {
+    const deck = await db.collection('decks').findOne({ _id: deckId });
+    if (!deck) return null;
+    await ensureVersioned(db, deck);
+    version = { cards: deck.cards };
+  }
+  const resolved = resolveDecklist(version.cards || '');
+  const lines = (key) => (resolved.sections.find((s) => s.key === key)?.cards || []).map((l) => ({ name: l.card ? l.card.name : l.name, qty: l.qty, image: l.card?.image || null }));
+  return { main: lines('main'), sideboard: lines('sideboard') };
+}
+
 router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res, next) => {
   try {
     const tournament = await loadTournament(req, res);
@@ -257,13 +383,72 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
     if (!match || match.bye) return res.status(404).render('error', { message: 'Match introuvable' });
     const standings = computeStandings(tournament);
     const recordOf = Object.fromEntries(standings.map((s) => [s.userId, `${s.wins}-${s.draws}-${s.losses}`]));
+    const viewer = req.session.user;
+    const me = viewer ? [match.p1, match.p2].find((p) => String(p.userId) === viewer.id) || null : null;
+    const siding = match.siding || {};
     res.render('match', {
       tournament,
       round,
       match,
       recordOf,
-      canReport: canReportMatch(tournament, round, match, req.session.user),
+      canReport: canReportMatch(tournament, round, match, viewer),
+      siding,
+      sidingVisible: { p1: sidingVisible(tournament, match.p1.userId, viewer), p2: sidingVisible(tournament, match.p2.userId, viewer) },
+      me,
+      myDeckLines: me ? await deckLinesFor(req.db, me) : null,
+      mySiding: me ? siding[String(me.userId)] || null : null,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Lignes « qty nom » saisies à la main (deck introuvable) : réutilise le parseur de decklist.
+function parseFreeLines(text) {
+  return parseDecklist(String(text || '').slice(0, 5000))
+    .flatMap((s) => s.cards)
+    .map((c) => ({ name: c.name.slice(0, 120), qty: Math.min(c.qty, 40) }));
+}
+
+router.post('/tournaments/:id/rounds/:roundNumber/tables/:table/siding', requireAuth, async (req, res, next) => {
+  try {
+    const tournament = await loadTournament(req, res);
+    if (!tournament) return;
+    const roundNumber = parseInt(req.params.roundNumber, 10);
+    const table = parseInt(req.params.table, 10);
+    const url = `/tournaments/${tournament._id}/rounds/${roundNumber}/tables/${table}#side-deck`;
+    const { match, path } = findMatch(tournament, roundNumber, table);
+    if (!match || match.bye) return flashAndRedirect(req, res, 'error', 'Match introuvable.', `/tournaments/${tournament._id}`);
+    const me = [match.p1, match.p2].find((p) => String(p.userId) === req.session.user.id);
+    if (!me) return flashAndRedirect(req, res, 'error', 'Seuls les joueurs de la table peuvent noter leur side deck.', url);
+
+    let out = [];
+    let inn = [];
+    if (req.body.mode === 'text') {
+      out = parseFreeLines(req.body.outText);
+      inn = parseFreeLines(req.body.inText);
+    } else {
+      // Quantités par carte du deck principal (sorties) et de la réserve (entrées), bornées par le deck joué.
+      const lines = await deckLinesFor(req.db, me);
+      const pick = (prefix, ref) =>
+        (ref || [])
+          .map((c, i) => ({ name: c.name, qty: Math.max(0, Math.min(c.qty, parseInt(req.body[`${prefix}_${i}`], 10) || 0)) }))
+          .filter((c) => c.qty > 0);
+      out = pick('out', lines?.main);
+      inn = pick('in', lines?.sideboard);
+    }
+    const note = String(req.body.note || '').trim().slice(0, 300);
+    const key = `${path}.siding.${req.session.user.id}`;
+    if (out.length === 0 && inn.length === 0 && !note) {
+      await req.db.collection('tournaments').updateOne({ _id: tournament._id }, { $unset: { [key]: '' } });
+      return flashAndRedirect(req, res, 'success', 'Side deck effacé pour ce match.', url);
+    }
+    await req.db.collection('tournaments').updateOne(
+      { _id: tournament._id },
+      { $set: { [key]: { out, in: inn, note, updatedAt: new Date() } } }
+    );
+    const hidden = tournament.status !== 'terminé' ? ' Il restera caché aux autres jusqu’à la clôture du tournoi.' : '';
+    flashAndRedirect(req, res, 'success', 'Side deck enregistré.' + hidden, url);
   } catch (err) {
     next(err);
   }
@@ -376,7 +561,7 @@ router.post('/tournaments/:id/finish', requireAuth, async (req, res, next) => {
         $set: {
           status: 'terminé',
           finishedAt: new Date(),
-          winner: { userId: champion.userId, username: champion.username, deckName: champion.deckName, deckId: champion.deckId },
+          winner: { userId: champion.userId, username: champion.username, deckName: champion.deckName, deckId: champion.deckId, deckVersion: champion.deckVersion || 1 },
         },
       }
     );

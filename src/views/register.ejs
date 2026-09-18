@@ -1,11 +1,19 @@
 <%- include('partials/head', { title: 'Créer un compte' }) %>
 
 <div class="card card-narrow">
-  <h1>Créer un compte</h1>
+  <h1><%= invite ? 'Récupérer mon compte' : 'Créer un compte' %></h1>
+  <% if (invite) { %>
+    <p class="muted">Tu as été ajouté·e à un tournoi en tant qu'invité·e sous le pseudo <strong><%= invite.username %></strong>. Choisis ton mot de passe : ton historique de matchs est conservé.</p>
+  <% } %>
   <form method="post" action="/register">
-    <label>Pseudo <input name="username" required minlength="2" autofocus></label>
+    <% if (invite) { %><input type="hidden" name="invite" value="<%= invite.token %>"><% } %>
+    <label>Pseudo <input name="username" required minlength="2" autofocus value="<%= invite ? invite.username : '' %>"></label>
+    <label>E-mail <%= invite ? '' : '(facultatif)' %>
+      <input type="email" name="email" value="<%= invite ? invite.email : '' %>" <%= invite ? 'readonly' : '' %> placeholder="prenom.nom@exemple.fr">
+    </label>
+    <% if (!invite) { %><p class="muted form-hint">Sert à te retrouver si un organisateur t'ajoute à un tournoi sans que tu sois inscrit·e.</p><% } %>
     <label>Mot de passe <input type="password" name="password" required minlength="4"></label>
-    <button class="btn btn-gold btn-block">Créer mon compte</button>
+    <button class="btn btn-gold btn-block"><%= invite ? 'Récupérer mon compte' : 'Créer mon compte' %></button>
   </form>
   <p class="muted">Déjà un compte ? <a href="/login">Connexion</a></p>
 </div>

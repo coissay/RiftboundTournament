@@ -1,0 +1,60 @@
+<%- include('../partials/head', { title: 'Free play' }) %>
+
+<div class="page-head">
+  <div>
+    <h1>Free play</h1>
+    <p class="muted">Matchs hors tournoi entre collègues : duels, mêlées à trois ou 2v2. Leurs stats ont leur propre section.</p>
+  </div>
+  <% if (currentUser) { %>
+    <a href="/free-play/new" class="btn btn-gold">+ Nouveau match</a>
+  <% } %>
+</div>
+
+<%- include('_nav', { section: 'matches' }) %>
+
+<% const total = Object.values(byFormat).reduce((a, b) => a + b, 0); %>
+<div class="format-filter">
+  <a href="/free-play" class="chip <%= !format ? 'active' : '' %>">Tous <span class="muted">(<%= total %>)</span></a>
+  <% for (const [key, spec] of Object.entries(FORMATS)) { %>
+    <a href="/free-play?format=<%= key %>" class="chip <%= format === key ? 'active' : '' %>"><%= spec.label %> <span class="muted">(<%= byFormat[key] || 0 %>)</span></a>
+  <% } %>
+</div>
+
+<% if (matches.length === 0) { %>
+  <div class="empty">Aucun match<%= format ? ' en ' + FORMATS[format].label : '' %> pour le moment. <% if (currentUser) { %>Lance le premier !<% } else { %>Connecte-toi pour en créer un.<% } %></div>
+<% } %>
+
+<div class="event-list">
+<% for (const m of matches) { %>
+  <% const g = gamesOf(m); %>
+  <a href="/free-play/<%= m._id %>" class="event-card fp-card">
+    <div class="event-date">
+      <span class="day"><%= m.date.toLocaleDateString('fr-FR', { day: '2-digit' }) %></span>
+      <span class="month"><%= m.date.toLocaleDateString('fr-FR', { month: 'short' }) %></span>
+    </div>
+    <div class="event-info">
+      <div class="fp-sides">
+        <% m.sides.forEach((side, i) => { %>
+          <% if (i > 0) { %><span class="fp-vs">vs</span><% } %>
+          <span class="fp-side <%= m.result === i ? 'fp-side-winner' : '' %>">
+            <strong><%= sideName(side) %></strong>
+            <span class="fp-score"><%= g.wins[i] %></span>
+          </span>
+        <% }) %>
+      </div>
+      <p class="muted">
+        <%= FORMATS[m.format] ? FORMATS[m.format].label : m.format %> · Bo<%= m.bestOf || 1 %>
+        <% if (g.draws) { %> · <%= g.draws %> nul<%= g.draws > 1 ? 's' : '' %><% } %>
+        · créé par <%= m.creatorName %>
+        <% if (m.notes) { %> · <%= m.notes %><% } %>
+      </p>
+    </div>
+    <div class="event-side">
+      <span class="badge badge-<%= m.status === 'en_cours' ? 'live' : 'done' %>"><%= m.status === 'en_cours' ? '● En cours' : m.result === 'draw' ? 'Nul' : 'Terminé' %></span>
+      <span class="muted"><%= g.played %> manche<%= g.played > 1 ? 's' : '' %></span>
+    </div>
+  </a>
+<% } %>
+</div>
+
+<%- include('../partials/foot') %>

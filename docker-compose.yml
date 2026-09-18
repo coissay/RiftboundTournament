@@ -10,6 +10,9 @@ services:
       # SESSION_SECRET: change-moi-en-prod
       # ADMIN_USERS: alice,bob        # pseudos ayant la main sur tous les tournois (rouvrir, clôturer…)
       # AUTO_CLOSE_DAYS: 7            # clôture automatique des tournois en attente depuis N jours
+      # SMTP_URL: smtp://user:pass@smtp.exemple.fr:587   # envoi des invitations aux joueurs sans compte (sinon lien affiché à l'organisateur)
+      # MAIL_FROM: Riftbound Tournois <no-reply@exemple.fr>
+      # BASE_URL: http://192.168.69.178:3000             # adresse publique utilisée dans les liens des e-mails
     depends_on:
       mongo:
         condition: service_healthy

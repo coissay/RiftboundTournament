@@ -1,7 +1,12 @@
 <%- include('partials/head', { title: 'Statistiques' }) %>
 
-<div class="page-head"><h1>Statistiques</h1></div>
-<p class="muted">Tous tournois confondus. Les byes sont exclus, un match nul compte pour une demi-victoire dans le win rate.</p>
+<div class="page-head">
+  <div>
+    <h1>Statistiques</h1>
+    <p class="muted">Tous tournois confondus. Les byes sont exclus, un match nul compte pour une demi-victoire dans le win rate. Les matchs free play ont <a href="/free-play/stats">leurs propres stats</a>.</p>
+  </div>
+  <a href="/free-play/stats" class="btn btn-ghost">Stats free play →</a>
+</div>
 
 <div class="stats-grid">
   <div class="card">
@@ -37,7 +42,7 @@
       <tbody>
       <% for (const d of decks) { %>
         <tr>
-          <td><strong><%= d.deckName %></strong></td>
+          <td><strong><% if (d.deckId) { %><a href="/decks/<%= d.deckId %>"><%= d.deckName %></a><% } else { %><%= d.deckName %><% } %></strong><% if (d.versions.length > 1) { %> <span class="muted">(<%= d.versions.length %> versions)</span><% } %></td>
           <td class="muted"><a href="/players/<%= d.ownerId %>"><%= d.ownerName %></a></td>
           <td><%= d.cups ? '🏆'.repeat(Math.min(d.cups, 5)) + (d.cups > 5 ? ' ×' + d.cups : '') : '—' %></td>
           <td><%= d.matches %></td>
@@ -49,6 +54,18 @@
           </td>
           <td><%= (d.gameWinRate * 100).toFixed(1) %>%</td>
         </tr>
+        <% if (d.versions.length > 1) { for (const v of d.versions) { %>
+          <tr class="row-version">
+            <td class="muted">↳ <a href="/decks/<%= d.deckId %>/versions/<%= v.version %>" class="version-chip">v<%= v.version %></a></td>
+            <td></td>
+            <td><%= v.cups ? '🏆'.repeat(Math.min(v.cups, 5)) : '—' %></td>
+            <td><%= v.matches %></td>
+            <td><%= v.wins %>-<%= v.draws %>-<%= v.losses %></td>
+            <td><%= v.gameWins %>-<%= v.gameDraws %>-<%= v.gameLosses %></td>
+            <td><%= (v.winRate * 100).toFixed(1) %>%</td>
+            <td><%= (v.gameWinRate * 100).toFixed(1) %>%</td>
+          </tr>
+        <% } } %>
       <% } %>
       </tbody>
     </table>

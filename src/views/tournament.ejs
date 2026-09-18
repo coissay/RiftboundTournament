@@ -65,6 +65,23 @@
   </div>
 <% } %>
 
+<!-- Inscrit sans deck (ajouté par l'organisateur) : renseigner le deck joué -->
+<% if (currentUser && myDeckMissing && tournament.status !== 'inscriptions') { %>
+  <div class="card join-card">
+    <% if (myDecks.length === 0) { %>
+      <p>Tu es inscrit·e sans deck : <a href="/decks/new">crée le deck que tu as joué</a> pour le renseigner ici.</p>
+    <% } else { %>
+      <form method="post" action="/tournaments/<%= tournament._id %>/my-deck" class="join-form">
+        <label>Deck que j'ai joué :
+          <select name="deckId"><% for (const d of myDecks) { %><option value="<%= d._id %>"><%= d.name %><%= d.legend ? ' (' + d.legend + ')' : '' %></option><% } %></select>
+        </label>
+        <button class="btn btn-gold">Enregistrer</button>
+      </form>
+      <span class="muted">La version du deck en vigueur à la date du tournoi sera retenue.</span>
+    <% } %>
+  </div>
+<% } %>
+
 <!-- État de la ronde pour les non-organisateurs -->
 <% if (!organizer && tournament.status === 'en_cours' && lastRound) { %>
   <% const pendingTables = lastRound.matches.filter(m => !m.result).map(m => m.table); %>
@@ -86,6 +103,15 @@
         <button class="btn btn-gold" <%= tournament.players.length < 2 ? 'disabled' : '' %>>▶ Lancer le tournoi (ronde 1)</button>
       </form>
       <% if (tournament.players.length < 2) { %><span class="muted">— il faut au moins 2 inscrits</span><% } %>
+      <details class="guest-add">
+        <summary class="btn btn-ghost">+ Ajouter un joueur sans compte</summary>
+        <form method="post" action="/tournaments/<%= tournament._id %>/guests" class="guest-form">
+          <label>Pseudo <input name="username" required minlength="2" maxlength="40" placeholder="ex : Sam"></label>
+          <label>E-mail <input type="email" name="email" required placeholder="sam@exemple.fr"></label>
+          <button class="btn btn-gold">Ajouter et inviter</button>
+        </form>
+        <p class="muted">Il/elle reçoit un lien pour créer son compte et garder son historique<%= mailConfigured ? '' : ' (e-mail non configuré : le lien te sera affiché à transmettre)' %>. Le deck pourra être renseigné après coup.</p>
+      </details>
     <% } else if (tournament.status === 'en_cours') { %>
       <% const pending = lastRound && lastRound.matches.some(m => !m.result); %>
       <form method="post" action="/tournaments/<%= tournament._id %>/rounds" class="inline">
@@ -131,6 +157,7 @@
             <td>
               <% if (matchUrl) { %><a href="<%= matchUrl %>" class="pairing-cell"><% } %>
                 <strong><%= m.p1.username %></strong> <span class="muted">(<%= recordOf[String(m.p1.userId)] || '0-0-0' %>)</span>
+                <% if (m.siding && m.siding[String(m.p1.userId)] && (tournament.status === 'terminé' || (currentUser && currentUser.id === String(m.p1.userId)))) { %><span title="Side deck noté">🔁</span><% } %>
                 <span class="muted deck-tag"><%= m.p1.deckName %></span>
               <% if (matchUrl) { %></a><% } %>
             </td>
@@ -139,6 +166,7 @@
               <% } else { %>
                 <a href="<%= matchUrl %>" class="pairing-cell">
                   <strong><%= m.p2.username %></strong> <span class="muted">(<%= recordOf[String(m.p2.userId)] || '0-0-0' %>)</span>
+                  <% if (m.siding && m.siding[String(m.p2.userId)] && (tournament.status === 'terminé' || (currentUser && currentUser.id === String(m.p2.userId)))) { %><span title="Side deck noté">🔁</span><% } %>
                   <span class="muted deck-tag"><%= m.p2.deckName %></span>
                 </a>
               <% } %>
@@ -215,9 +243,24 @@
       <tbody>
       <% for (const p of tournament.players) { %>
         <tr>
-          <td><a href="/players/<%= p.userId %>"><strong><%= p.username %></strong></a><%= p.dropped ? ' <span class="muted">(drop)</span>' : '' %></td>
-          <td class="muted"><%= p.deckName %></td>
+          <% const gi = guestInfo[String(p.userId)]; %>
+          <td><a href="/players/<%= p.userId %>"><strong><%= p.username %></strong></a><% if (gi) { %> <span class="badge badge-guest" title="Compte non créé — <%= gi.email %>">invité·e</span><% } %><%= p.dropped ? ' <span class="muted">(drop)</span>' : '' %></td>
+          <td class="muted">
+            <% if (p.deckId || p.deckName) { %><%= p.deckName %><%= p.deckVersion ? ' v' + p.deckVersion : '' %>
+            <% } else if (currentUser && currentUser.id === String(p.userId) && myDecks.length) { %>
+              <form method="post" action="/tournaments/<%= tournament._id %>/my-deck" class="inline guest-deck-form">
+                <select name="deckId"><% for (const d of myDecks) { %><option value="<%= d._id %>"><%= d.name %></option><% } %></select>
+                <button class="btn btn-small btn-gold">Indiquer mon deck</button>
+              </form>
+            <% } else { %><em>à renseigner</em><% } %>
+          </td>
           <td>
+            <% if (gi) { %>
+              <form method="post" action="/tournaments/<%= tournament._id %>/guests/<%= p.userId %>/invite" class="inline">
+                <button class="btn btn-small btn-ghost" title="<%= gi.sentAt ? 'Dernier envoi le ' + gi.sentAt.toLocaleString('fr-FR') : 'Jamais envoyé' %>">✉ <%= gi.sentAt ? 'Renvoyer l’invitation' : 'Envoyer l’invitation' %></button>
+              </form>
+              <% if (gi.link) { %><button type="button" class="btn btn-small btn-ghost" onclick="navigator.clipboard.writeText('<%= gi.link %>').then(()=>{this.textContent='Lien copié !'})">Copier le lien</button><% } %>
+            <% } %>
             <% if (organizer && !p.dropped && tournament.status === 'en_cours') { %>
               <form method="post" action="/tournaments/<%= tournament._id %>/players/<%= p.userId %>/drop" class="inline"
                     onsubmit="return confirm('Retirer <%= p.username %> des prochaines rondes ?')">

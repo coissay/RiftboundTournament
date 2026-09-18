@@ -36,6 +36,7 @@ function emptyRecord(player) {
     username: player.username,
     deckName: player.deckName,
     deckId: player.deckId ? String(player.deckId) : null,
+    deckVersion: player.deckVersion || 1,
     dropped: !!player.dropped,
     points: 0,
     wins: 0,
@@ -188,15 +189,15 @@ export function pairRound(tournament) {
   const result = matches.map(([a, b], i) => ({
     table: i + 1,
     bye: false,
-    p1: { userId: a.userId, username: a.username, deckId: a.deckId, deckName: a.deckName },
-    p2: { userId: b.userId, username: b.username, deckId: b.deckId, deckName: b.deckName },
+    p1: { userId: a.userId, username: a.username, deckId: a.deckId, deckName: a.deckName, deckVersion: a.deckVersion || 1 },
+    p2: { userId: b.userId, username: b.username, deckId: b.deckId, deckName: b.deckName, deckVersion: b.deckVersion || 1 },
     result: null,
   }));
   if (byePlayer) {
     result.push({
       table: result.length + 1,
       bye: true,
-      p1: { userId: byePlayer.userId, username: byePlayer.username, deckId: byePlayer.deckId, deckName: byePlayer.deckName },
+      p1: { userId: byePlayer.userId, username: byePlayer.username, deckId: byePlayer.deckId, deckName: byePlayer.deckName, deckVersion: byePlayer.deckVersion || 1 },
       p2: null,
       result: 'p1',
     });

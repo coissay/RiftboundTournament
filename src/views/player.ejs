@@ -7,6 +7,39 @@
   </div>
 </div>
 
+<% if (player.guest) { %>
+  <div class="notice-banner">👋 Joueur·se invité·e : ajouté·e à un tournoi par un organisateur, sans compte pour l'instant. L'historique ci-dessous sera rattaché à son compte dès qu'il/elle l'aura créé via son lien d'invitation.</div>
+<% } %>
+
+<% if (isMe && missingDeck.length > 0) { %>
+  <div class="card">
+    <h2>🃏 Decks à renseigner</h2>
+    <p class="muted">Tu as été inscrit·e à ces tournois sans deck. Indique celui que tu as joué : la version en vigueur à la date du tournoi sera retenue pour les stats.</p>
+    <% if (myDecks.length === 0) { %>
+      <p><a href="/decks/new" class="btn btn-gold btn-small">Créer le deck que j'ai joué</a></p>
+    <% } else { %>
+      <table class="table">
+        <thead><tr><th>Tournoi</th><th>Date</th><th>Deck joué</th></tr></thead>
+        <tbody>
+        <% for (const t of missingDeck) { %>
+          <tr>
+            <td><a href="/tournaments/<%= t._id %>"><%= t.name %></a></td>
+            <td class="muted"><%= t.date.toLocaleDateString('fr-FR') %></td>
+            <td>
+              <form method="post" action="/tournaments/<%= t._id %>/my-deck" class="inline guest-deck-form">
+                <input type="hidden" name="back" value="player">
+                <select name="deckId"><% for (const d of myDecks) { %><option value="<%= d._id %>"><%= d.name %></option><% } %></select>
+                <button class="btn btn-small btn-gold">Enregistrer</button>
+              </form>
+            </td>
+          </tr>
+        <% } %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+<% } %>
+
 <div class="stat-tiles">
   <div class="stat-tile"><span class="stat-value">🏆 <%= cups.length %></span><span class="stat-label">Coupes</span></div>
   <div class="stat-tile"><span class="stat-value"><%= summary.wins %>-<%= summary.draws %>-<%= summary.losses %></span><span class="stat-label">Matchs V-N-D</span></div>
@@ -129,6 +162,52 @@
   <% } %>
 </div>
 
+<!-- Free play : section à part des tournois -->
+<div class="card">
+  <div class="page-head">
+    <h2>🎲 Free play <span class="muted">(hors tournoi)</span></h2>
+    <a href="/free-play/stats" class="muted">Stats free play →</a>
+  </div>
+  <% if (freePlay.history.length === 0) { %>
+    <div class="empty">Aucun match free play pour l'instant.</div>
+  <% } else { %>
+    <% const fs = freePlay.summary; %>
+    <% if (fs) { %>
+    <div class="stat-tiles">
+      <div class="stat-tile"><span class="stat-value"><%= fs.wins %>-<%= fs.draws %>-<%= fs.losses %></span><span class="stat-label">Matchs V-N-D</span></div>
+      <div class="stat-tile"><span class="stat-value"><%= (fs.winRate * 100).toFixed(1) %>%</span><span class="stat-label">Win rate matchs</span></div>
+      <div class="stat-tile"><span class="stat-value"><%= fs.gameWins %>-<%= fs.gameDraws %>-<%= fs.gameLosses %></span><span class="stat-label">Manches V-N-D</span></div>
+      <% for (const [key, spec] of Object.entries(FORMATS)) { const f = freePlay.perFormat[key]; %>
+        <div class="stat-tile"><span class="stat-value"><%= f ? f.wins + '-' + f.draws + '-' + f.losses : '—' %></span><span class="stat-label"><%= spec.label %></span></div>
+      <% } %>
+    </div>
+    <% } %>
+    <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>Date</th><th>Format</th><th>Mon deck</th><th>Avec</th><th>Contre</th><th>Score</th><th>Résultat</th></tr></thead>
+      <tbody>
+      <% for (const h of freePlay.history) { %>
+        <tr>
+          <td class="muted"><a href="/free-play/<%= h.id %>"><%= h.date.toLocaleDateString('fr-FR') %></a></td>
+          <td><%= FORMATS[h.format] ? FORMATS[h.format].label : h.format %></td>
+          <td class="muted"><%= h.myDeck || '—' %></td>
+          <td><% if (h.teammates.length === 0) { %><span class="muted">—</span><% } else { h.teammates.forEach((t, i) => { %><% if (i > 0) { %>, <% } %><a href="/players/<%= t.userId %>"><%= t.username %></a><% }) } %></td>
+          <td><% h.opponents.forEach((o, i) => { %><% if (i > 0) { %> · <% } %><% o.players.forEach((p, j) => { %><% if (j > 0) { %> &amp; <% } %><a href="/players/<%= p.userId %>"><%= p.username %></a><% if (p.deckName) { %> <span class="muted">(<%= p.deckName %>)</span><% } %><% }) %><% }) %></td>
+          <td><%= h.score || '—' %></td>
+          <td>
+            <% if (h.outcome === 'win') { %><span class="result-chip win">Victoire</span>
+            <% } else if (h.outcome === 'loss') { %><span class="result-chip loss">Défaite</span>
+            <% } else if (h.outcome === 'draw') { %><span class="result-chip draw">Nul</span>
+            <% } else { %><span class="badge badge-live">● En cours</span><% } %>
+          </td>
+        </tr>
+      <% } %>
+      </tbody>
+    </table>
+    </div>
+  <% } %>
+</div>
+
 <div class="card">
   <h2>Historique des matchs <span class="muted">(tournois internes)</span></h2>
   <% if (history.length === 0) { %>
@@ -143,7 +222,7 @@
         <td class="muted"><%= h.date.toLocaleDateString('fr-FR') %></td>
         <td><a href="/tournaments/<%= h.tournamentId %>"><%= h.tournamentName %></a></td>
         <td><%= h.round %></td>
-        <td class="muted"><%= h.myDeck %></td>
+        <td class="muted"><%= h.myDeck || '—' %></td>
         <td>
           <% if (h.bye) { %><em class="muted">BYE</em>
           <% } else { %><a href="/players/<%= h.oppId %>"><%= h.oppName %></a> <span class="muted deck-tag"><%= h.oppDeck %></span><% } %>

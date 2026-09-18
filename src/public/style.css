@@ -281,7 +281,7 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
   border-radius: 12px;
 }
 .btn-report span { font-size: 0.75rem; font-weight: 400; opacity: 0.8; }
-.btn-win-left, .btn-win-right { background: rgba(74, 222, 128, 0.1); border-color: rgba(74, 222, 128, 0.5); color: var(--live); }
+.btn-win-left, .btn-win-right, .btn-win-mid { background: rgba(74, 222, 128, 0.1); border-color: rgba(74, 222, 128, 0.5); color: var(--live); }
 .btn-draw-mid { background: var(--bg-card-2); color: var(--muted); }
 .btn-report:hover { filter: brightness(1.3); }
 .match-final { text-align: center; }
@@ -413,3 +413,77 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .locator-page h2 { margin-top: 1.2rem; }
 .locator-google-note { background: rgba(212, 169, 65, 0.1); border: 1px solid rgba(212, 169, 65, 0.4); border-radius: 8px; padding: 0.7rem 0.9rem; margin: 0.6rem 0 0.9rem; font-size: 0.92rem; }
 .locator-page code { background: var(--bg); padding: 0.05rem 0.35rem; border-radius: 4px; }
+
+/* ---- Free play (matchs hors tournoi : 1v1, 1v1v1, 2v2) ---- */
+.format-filter { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.chip {
+  display: inline-block; padding: 0.3rem 0.8rem; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--text); font-size: 0.9rem;
+}
+.chip:hover { text-decoration: none; border-color: var(--gold-dark); }
+.chip.active { border-color: var(--gold); color: var(--gold); }
+.fp-sides { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem; }
+.fp-side { display: inline-flex; align-items: center; gap: 0.4rem; }
+.fp-side-winner strong { color: var(--gold); }
+.fp-score { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold); background: var(--bg); border-radius: 6px; padding: 0.05rem 0.45rem; }
+.fp-vs { color: var(--muted); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.1em; }
+.fp-side-box { border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.9rem 0.2rem; margin-bottom: 0.9rem; background: var(--bg-card-2); }
+.fp-side-box legend { color: var(--gold); font-weight: 700; padding: 0 0.4rem; }
+.fp-slot { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.fp-slot label { margin-bottom: 0.6rem; }
+.fp-player { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; }
+.fp-player .versus-name { color: var(--text); }
+.fp-player + .fp-player { margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dashed var(--border); width: 100%; }
+.fp-team-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.1em; }
+.fp-side-score { font-size: 1.6rem; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; margin-top: 0.4rem; }
+.versus-3 .versus-center, .versus-4 .versus-center { min-width: 60px; }
+.versus-4 { flex-wrap: wrap; }
+.versus-4 .versus-side { flex: 1 1 calc(50% - 4rem); min-width: 160px; }
+.versus-4 .versus-center { display: none; }
+.report-buttons-3 form { max-width: 170px; }
+.report-buttons-4 { flex-wrap: wrap; }
+.report-buttons-4 form { flex: 1 1 calc(33% - 1rem); max-width: 200px; }
+.fp-actions { justify-content: center; margin-top: 0.8rem; }
+@media (max-width: 560px) {
+  .fp-slot { grid-template-columns: 1fr; }
+  .versus-3 .versus-center { order: 0; }
+  .versus-4 .versus-side { flex-basis: 100%; }
+}
+
+/* ---- Versions de deck ---- */
+.version-chip { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; border: 1px solid var(--gold-dark); color: var(--gold); font-size: 0.8rem; font-weight: 700; }
+.version-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.version-item { border: 1px solid var(--border); border-radius: 10px; padding: 0.7rem 0.9rem; background: var(--bg); }
+.version-item.version-current { border-color: rgba(212, 169, 65, 0.5); }
+.version-head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.version-diff { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.3rem 0; }
+.diff-chip { padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.85rem; white-space: nowrap; }
+.diff-chip.diff-add { background: rgba(74, 222, 128, 0.12); color: var(--live); }
+.diff-chip.diff-del { background: rgba(224, 85, 85, 0.12); color: var(--danger); }
+.diff-chip.diff-move { background: rgba(212, 169, 65, 0.12); color: var(--gold); }
+.version-stats { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: 0.4rem; font-size: 0.92rem; }
+.row-version td { background: rgba(255, 255, 255, 0.02); font-size: 0.88rem; }
+
+/* ---- Side deck (page match) ---- */
+.siding-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.siding-col h3, .siding-col h4 { margin: 0 0 0.4rem; font-size: 1rem; }
+.siding-lists { display: flex; flex-direction: column; gap: 0.4rem; }
+.siding-list { list-style: none; margin: 0.2rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.siding-note { margin: 0.5rem 0 0; font-style: italic; }
+.siding-form { margin-top: 1rem; }
+.siding-form summary { list-style: none; cursor: pointer; display: inline-block; }
+.siding-form summary::-webkit-details-marker { display: none; }
+.siding-form form { margin-top: 0.8rem; }
+.siding-line { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.35rem; font-size: 0.92rem; }
+.siding-line input { width: 3.2rem; padding: 0.25rem 0.4rem; margin: 0; }
+@media (max-width: 560px) { .siding-grid { grid-template-columns: 1fr; } }
+
+/* ---- Joueurs invités ---- */
+.badge-guest { background: rgba(147, 197, 253, 0.15); color: #93c5fd; border: 1px solid rgba(147, 197, 253, 0.4); font-size: 0.72rem; }
+.guest-add { width: 100%; }
+.guest-add summary { list-style: none; cursor: pointer; display: inline-block; }
+.guest-add summary::-webkit-details-marker { display: none; }
+.guest-form { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; margin-top: 0.6rem; }
+.guest-form label { margin: 0; }
+.guest-deck-form { display: inline-flex; gap: 0.4rem; align-items: center; }
+.guest-deck-form select { margin: 0; padding: 0.3rem 0.5rem; }
