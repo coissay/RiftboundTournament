@@ -38,9 +38,9 @@
       </div>
       <% if (v.diff) { %>
         <div class="version-diff">
-          <% for (const c of v.diff.added) { %><span class="diff-chip diff-add">+<%= c.qty %> <%= c.name %><% if (c.section !== 'main') { %> <span class="muted">(<%= c.sectionLabel %>)</span><% } %></span><% } %>
-          <% for (const c of v.diff.removed) { %><span class="diff-chip diff-del">−<%= c.qty %> <%= c.name %><% if (c.section !== 'main') { %> <span class="muted">(<%= c.sectionLabel %>)</span><% } %></span><% } %>
-          <% for (const c of (v.diff.moved || [])) { %><span class="diff-chip diff-move">⇄ <%= c.qty %> <%= c.name %> <span class="muted"><%= c.fromLabel %> → <%= c.toLabel %></span></span><% } %>
+          <% for (const c of v.diff.added) { %><span class="diff-chip diff-add">+<%= c.qty %> <%- include('partials/card-name', { name: c.name, cardImage }) %><% if (c.section !== 'main') { %> <span class="muted">(<%= c.sectionLabel %>)</span><% } %></span><% } %>
+          <% for (const c of v.diff.removed) { %><span class="diff-chip diff-del">−<%= c.qty %> <%- include('partials/card-name', { name: c.name, cardImage }) %><% if (c.section !== 'main') { %> <span class="muted">(<%= c.sectionLabel %>)</span><% } %></span><% } %>
+          <% for (const c of (v.diff.moved || [])) { %><span class="diff-chip diff-move">⇄ <%= c.qty %> <%- include('partials/card-name', { name: c.name, cardImage }) %> <span class="muted"><%= c.fromLabel %> → <%= c.toLabel %></span></span><% } %>
         </div>
       <% } else { %>
         <div class="muted">Version initiale.</div>

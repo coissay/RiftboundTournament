@@ -94,10 +94,10 @@
         <% } else { %>
           <div class="siding-lists">
             <div><span class="muted">Sorties</span><% if (sd.out.length === 0) { %> <span class="muted">—</span><% } %>
-              <ul class="siding-list"><% for (const c of sd.out) { %><li><span class="diff-chip diff-del">−<%= c.qty %> <%= c.name %></span></li><% } %></ul>
+              <ul class="siding-list"><% for (const c of sd.out) { %><li><span class="diff-chip diff-del">−<%= c.qty %> <%- include('partials/card-name', { name: c.name, cardImage }) %></span></li><% } %></ul>
             </div>
             <div><span class="muted">Entrées</span><% if (sd.in.length === 0) { %> <span class="muted">—</span><% } %>
-              <ul class="siding-list"><% for (const c of sd.in) { %><li><span class="diff-chip diff-add">+<%= c.qty %> <%= c.name %></span></li><% } %></ul>
+              <ul class="siding-list"><% for (const c of sd.in) { %><li><span class="diff-chip diff-add">+<%= c.qty %> <%- include('partials/card-name', { name: c.name, cardImage }) %></span></li><% } %></ul>
             </div>
           </div>
           <% if (sd.note) { %><p class="siding-note"><%= sd.note %></p><% } %>
@@ -119,14 +119,14 @@
             <div class="siding-col">
               <h4>Sorties <span class="muted">(deck principal)</span></h4>
               <% myDeckLines.main.forEach((c, i) => { %>
-                <label class="siding-line"><input type="number" name="out_<%= i %>" min="0" max="<%= c.qty %>" value="<%= outQty[c.name] || 0 %>"> <span><%= c.name %> <span class="muted">×<%= c.qty %></span></span></label>
+                <label class="siding-line"><input type="number" name="out_<%= i %>" min="0" max="<%= c.qty %>" value="<%= outQty[c.name] || 0 %>"> <span><%- include('partials/card-name', { name: c.name, cardImage }) %> <span class="muted">×<%= c.qty %></span></span></label>
               <% }) %>
             </div>
             <div class="siding-col">
               <h4>Entrées <span class="muted">(réserve)</span></h4>
               <% if (myDeckLines.sideboard.length === 0) { %><p class="muted">Aucune réserve dans cette version du deck.</p><% } %>
               <% myDeckLines.sideboard.forEach((c, i) => { %>
-                <label class="siding-line"><input type="number" name="in_<%= i %>" min="0" max="<%= c.qty %>" value="<%= inQty[c.name] || 0 %>"> <span><%= c.name %> <span class="muted">×<%= c.qty %></span></span></label>
+                <label class="siding-line"><input type="number" name="in_<%= i %>" min="0" max="<%= c.qty %>" value="<%= inQty[c.name] || 0 %>"> <span><%- include('partials/card-name', { name: c.name, cardImage }) %> <span class="muted">×<%= c.qty %></span></span></label>
               <% }) %>
             </div>
           </div>

@@ -487,3 +487,6 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .guest-form label { margin: 0; }
 .guest-deck-form { display: inline-flex; gap: 0.4rem; align-items: center; }
 .guest-deck-form select { margin: 0; padding: 0.3rem 0.5rem; }
+
+/* Nom de carte survolable (popover image) */
+.card-name { cursor: zoom-in; text-decoration: underline dotted; text-underline-offset: 3px; }

@@ -1,0 +1,4 @@
+<%
+/* Attend : name (string), cardImage (fonction nom → {image, landscape} | null). Rend un nom survolable (popover). */
+const ci = cardImage ? cardImage(name) : null;
+%><% if (ci) { %><span class="card-name" data-full="<%= ci.image %>"<%= ci.landscape ? ' data-landscape' : '' %>><%= name %></span><% } else { %><%= name %><% } %>

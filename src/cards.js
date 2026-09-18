@@ -418,3 +418,10 @@ export function catalogForClient() {
   clientCatalogCache = { fetchedAt: state.fetchedAt, cards };
   return cards;
 }
+
+/** Image (et orientation) d'une carte par son nom, pour les noms textuels survolables. Null si inconnue. */
+export function cardImageByName(name) {
+  const card = findCard(name);
+  if (!card || !card.image) return null;
+  return { image: card.image, landscape: card.type === 'battlefield' };
+}

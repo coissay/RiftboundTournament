@@ -1,7 +1,8 @@
 // Popover « carte en grand » au survol d'une vignette.
 //
 // Contrat :
-//   - cible : tout élément `.card-thumb` contenant un `<img>` ;
+//   - cible : tout élément `.card-thumb` contenant un `<img>`, ou un nom de carte textuel
+//     `.card-name` portant `data-full` (image HD) et éventuellement `data-landscape` ;
 //   - URL pleine résolution : attribut `data-full` de la `.card-thumb`, sinon `href` (si c'est un lien),
 //     sinon `src` de l'img ;
 //   - attaché par délégation d'événements sur `document` : fonctionne aussi sur du HTML injecté
@@ -112,20 +113,28 @@
     popover.style.transform = 'translate(' + Math.round(x) + 'px, ' + Math.round(y) + 'px)';
   }
 
+  // Élément survolable : vignette avec image, ou nom de carte textuel avec data-full.
+  function targetOf(el) {
+    const t = el.closest && el.closest('.card-thumb, .card-name');
+    if (!t) return null;
+    if (t.classList.contains('card-name')) return t.dataset.full ? t : null;
+    return t.querySelector('img') ? t : null; // ex. carte non reconnue, sans image
+  }
+
   function show(thumb) {
     const img = thumb.querySelector('img');
-    if (!img) return;
+    if (!img && !thumb.dataset.full) return;
     ensurePopover();
 
     // Ratio provisoire : celui de la vignette (déjà chargée), identique à celui de l'image HD.
-    if (img.naturalWidth && img.naturalHeight) {
+    if (img && img.naturalWidth && img.naturalHeight) {
       ratio = img.naturalWidth / img.naturalHeight;
     } else {
-      ratio = thumb.closest('.card-grid-landscape') ? 1039 / 744 : 744 / 1039;
+      ratio = thumb.closest('.card-grid-landscape') || thumb.dataset.landscape !== undefined ? 1039 / 744 : 744 / 1039;
     }
 
-    const url = fullUrl(thumb, img);
-    popImg.alt = img.alt || '';
+    const url = img ? fullUrl(thumb, img) : thumb.dataset.full;
+    popImg.alt = (img && img.alt) || thumb.textContent.trim();
     if (popImg.src !== url) {
       // Cache l'ancienne image le temps que la nouvelle arrive (évite d'afficher la mauvaise carte).
       popover.classList.add('is-loading');
@@ -153,9 +162,8 @@
   // Entrée sur une vignette (délégation : mouseover remonte depuis l'img ou le badge quantité).
   document.addEventListener('mouseover', (e) => {
     if (!hoverAllowed()) return;
-    const thumb = e.target.closest && e.target.closest('.card-thumb');
+    const thumb = targetOf(e.target);
     if (!thumb || thumb === current) return;
-    if (!thumb.querySelector('img')) return; // ex. carte non reconnue, sans image
     // Un conteneur à éviter est ouvert : seules ses vignettes zooment (le reste de la page reste calme).
     const box = avoidBox();
     if (box && !box.contains(thumb)) return;
@@ -178,7 +186,7 @@
   // La grâce permet, en glissant vers la carte voisine, de la remplacer directement sans clignotement.
   document.addEventListener('mouseout', (e) => {
     if (!current) return;
-    const thumb = e.target.closest && e.target.closest('.card-thumb');
+    const thumb = e.target.closest && e.target.closest('.card-thumb, .card-name');
     if (thumb !== current) return;
     const to = e.relatedTarget;
     if (to && current.contains(to)) return;

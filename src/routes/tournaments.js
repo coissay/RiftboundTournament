@@ -4,7 +4,7 @@ import { requireAuth, flashAndRedirect, isAdmin } from '../middleware.js';
 import { AUTO_CLOSE_DAYS } from '../housekeeping.js';
 import { computeStandings, pairRound, suggestedRounds, winsNeeded } from '../swiss.js';
 import { currentVersion, playedVersion, ensureVersioned } from '../deckversions.js';
-import { resolveDecklist, parseDecklist } from '../cards.js';
+import { resolveDecklist, parseDecklist, cardImageByName } from '../cards.js';
 import { normalizeEmail, isEmail, findOrCreateGuest, newInviteToken, versionAtDate, setPlayedDeck } from '../guests.js';
 import { sendMail, inviteMail, absoluteUrl, mailConfigured } from '../mailer.js';
 
@@ -397,6 +397,7 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
       me,
       myDeckLines: me ? await deckLinesFor(req.db, me) : null,
       mySiding: me ? siding[String(me.userId)] || null : null,
+      cardImage: cardImageByName,
     });
   } catch (err) {
     next(err);

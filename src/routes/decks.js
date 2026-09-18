@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { oid } from '../db.js';
 import { requireAuth, flashAndRedirect } from '../middleware.js';
-import { resolveDecklist, thumb, catalogStatus } from '../cards.js';
+import { resolveDecklist, thumb, catalogStatus, cardImageByName } from '../cards.js';
 import { gamesOf } from '../swiss.js';
 import { countsForStats, outcomeForSide } from '../freeplay.js';
 import { createInitialVersion, bumpVersionIfChanged, ensureVersioned, currentVersion, statsByVersion } from '../deckversions.js';
@@ -101,7 +101,7 @@ router.get('/decks/:id', requireAuth, async (req, res, next) => {
       freePlayCountsForStats: countsForStats,
       freePlayOutcomeForSide: outcomeForSide,
     });
-    res.render('deck', { deck, isOwner, resolved: resolveDecklist(deck.cards), thumb, versions, versionStats, currentVersion: currentVersion(deck) });
+    res.render('deck', { deck, isOwner, resolved: resolveDecklist(deck.cards), thumb, versions, versionStats, currentVersion: currentVersion(deck), cardImage: cardImageByName });
   } catch (err) {
     next(err);
   }
@@ -115,7 +115,7 @@ router.get('/decks/:id/versions/:version', requireAuth, async (req, res, next) =
     await ensureVersioned(req.db, deck);
     const version = await req.db.collection('deck_versions').findOne({ deckId: deck._id, version: parseInt(req.params.version, 10) });
     if (!version) return res.status(404).render('error', { message: 'Version introuvable' });
-    res.render('deck-version', { deck, version, resolved: resolveDecklist(version.cards), thumb, isCurrent: version.version === currentVersion(deck) });
+    res.render('deck-version', { deck, version, resolved: resolveDecklist(version.cards), thumb, isCurrent: version.version === currentVersion(deck), cardImage: cardImageByName });
   } catch (err) {
     next(err);
   }
