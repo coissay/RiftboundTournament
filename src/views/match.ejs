@@ -61,7 +61,7 @@
             <span class="manche-side-player"><span class="muted">🔁 Ton side pour cette manche :</span>
               <% if (mine) { %><%- include('partials/siding-chips', { sd: mine, sdk: sidedDecks[mySide][cur] || null, n: cur, cardImage, thumb, inline: true }) %>
               <% } else { %><span class="muted">deck inscrit (aucun échange)</span><% } %>
-              <a href="#siding-form-current" class="btn btn-small <%= mine ? 'btn-ghost' : 'btn-gold' %>" onclick="document.getElementById('siding-form-current').open=true"><%= mine ? '✎ modifier' : '+ noter mon side' %></a>
+              <button type="button" class="btn btn-small <%= mine ? 'btn-ghost' : 'btn-gold' %>" onclick="var d=document.getElementById('siding-form-current'); d.open=!d.open; this.textContent=d.open?'▴ replier':'<%= mine ? '✎ modifier' : '+ noter mon side' %>'"><%= mine ? '✎ modifier' : '+ noter mon side' %></button>
             </span>
             <% const opp = mySide === 'p1' ? 'p2' : 'p1'; const osd = siding[opp].games[cur]; %>
             <span class="muted manche-side-opp"><%= match[opp].username %> : <%= osd ? (sidingVisible[opp] ? sideSummary(osd) : '🔒 side renseigné, visible à la clôture') : 'rien de noté' %></span>
@@ -69,6 +69,13 @@
             <span class="muted">🔁 <%= ['p1','p2'].map(s => match[s].username + ' : ' + (siding[s].games[cur] ? (sidingVisible[s] ? sideSummary(siding[s].games[cur]) : '🔒') : '—')).join(' · ') %></span>
           <% } %>
         </div>
+      <% } %>
+      <% if (mySide && !decided && sidingGames.includes(played + 1)) { const cur = played + 1; const mine = mySiding.games[cur] || null; %>
+        <% let prev = null; for (let k = cur - 1; k >= sidingGames[0] && !prev; k--) prev = mySiding.games[k] || null; %>
+        <details class="siding-form siding-form-current" id="siding-form-current">
+          <summary class="siding-form-summary">🔁 <%= mine ? 'Modifier mon side de la manche ' + cur : 'Noter mon side pour la manche ' + cur %></summary>
+          <%- include('partials/siding-form', { n: cur, mine, prev, tournament, round, match, myDeckLines, cardImage }) %>
+        </details>
       <% } %>
       <div class="report-buttons">
         <form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/games">
@@ -95,15 +102,8 @@
     <p class="muted">Seuls les joueurs de la table ou l'organisateur peuvent saisir le résultat<%= currentUser ? '' : ' — connecte-toi' %>.</p>
   <% } %>
 
-  <% if (mySide && !decided && sidingGames.includes(played + 1)) { const cur = played + 1; const mine = mySiding.games[cur] || null; %>
-    <% let prev = null; for (let k = cur - 1; k >= sidingGames[0] && !prev; k--) prev = mySiding.games[k] || null; %>
-    <details class="siding-form siding-form-current" id="siding-form-current">
-      <summary class="btn btn-ghost btn-small">🔁 <%= mine ? 'Modifier mon side de la manche ' + cur : 'Noter mon side pour la manche ' + cur %></summary>
-      <%- include('partials/siding-form', { n: cur, mine, prev, tournament, round, match, myDeckLines, cardImage }) %>
-    </details>
-  <% } %>
   <% if (mySide && decided && tournament.status !== 'terminé') { %>
-    <details class="siding-form siding-form-current">
+    <details class="siding-form siding-form-after">
       <summary class="btn btn-ghost btn-small">🔁 Noter / corriger mes sides après coup</summary>
       <% for (const n of sidingGames) { if (n > played) continue; const mine = mySiding.games[n] || null; let prev = null; for (let k = n - 1; k >= sidingGames[0] && !prev; k--) prev = mySiding.games[k] || null; %>
         <h4>Manche <%= n %></h4>

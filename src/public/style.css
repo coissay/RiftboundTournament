@@ -530,7 +530,12 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .siding-inline-chips .sided-deck { margin: 0; display: inline-block; }
 .manche-side-current { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.8rem; margin: 0 0 0.8rem; flex-direction: column; align-items: center; }
 .manche-side-opp { font-size: 0.85rem; }
-.siding-form-current { margin-top: 0.8rem; text-align: left; }
+.siding-form-current { margin: -0.3rem 0 0.9rem; text-align: left; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0 0.8rem; }
+.siding-form-current:not([open]) { display: none; }
+.siding-form-current[open] { padding-bottom: 0.6rem; }
+.siding-form-after { margin-top: 0.8rem; text-align: left; }
+.siding-form-after summary { list-style: none; cursor: pointer; display: inline-block; }
+.siding-form-summary { font-weight: 600; }
 .siding-form-current summary { list-style: none; cursor: pointer; display: inline-block; }
 .siding-form-current summary::-webkit-details-marker { display: none; }
 .siding-form-body { margin-top: 0.6rem; }
