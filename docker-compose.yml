@@ -21,9 +21,12 @@ services:
     image: mongo:7
     container_name: riftbound-mongo
     restart: unless-stopped
-    # Port publié pour le debug (mongosh) et le dev hors Docker (npm run dev).
+    # Mongo n'a pas de mot de passe : il ne doit JAMAIS être joignable depuis l'extérieur.
+    # Le port n'est publié que sur l'interface locale de la machine (debug mongosh, dev hors
+    # Docker) ; l'app y accède par le réseau interne Docker. Sur un serveur, supprime même
+    # ces deux lignes si tu n'en as pas besoin.
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:

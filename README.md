@@ -85,6 +85,13 @@ src/
   public/          # style.css, timer.js, live.js (rafraîchissement auto), table-mode.js, confirm.js, card-popover.js, deck-preview.js, freeplay-form.js, deckbuilder.js + deckbuilder.css
 ```
 
+## Sécurité et sauvegardes (à lire avant de déployer sur un serveur)
+
+- **Mongo n'a pas de mot de passe** : il ne doit être joignable que depuis le réseau interne Docker. Le compose ne publie le port 27017 que sur `127.0.0.1` ; sur un serveur exposé, supprime carrément le bloc `ports` du service `mongo`. Une instance Mongo ouverte sur Internet est effacée en quelques heures par des robots qui laissent une base `READ_ME_TO_RECOVER_YOUR_DATA` (demande de rançon : ne jamais payer, les données ne sont pas conservées).
+- Vérifie depuis l'extérieur que rien ne répond : `nc -zv <ip-du-serveur> 27017` doit échouer. Un pare-feu (`ufw deny 27017`) est une bonne ceinture de sécurité en plus.
+- Seul le port 3000 (ou ton reverse proxy HTTPS) doit être ouvert. Définis `SESSION_SECRET`.
+- **Sauvegardes** : `scripts/backup.sh` fait un dump compressé dans `backups/` (14 derniers conservés) — à mettre en cron quotidien ; `scripts/restore.sh <fichier>` restaure. Pour migrer une base d'une machine à l'autre : `backup.sh` ici, copie du fichier, `restore.sh` là-bas.
+
 ## Remettre la base à zéro
 
 ```bash
