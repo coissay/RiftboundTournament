@@ -14,12 +14,15 @@ function linesForClient(text) {
   const resolved = resolveDecklist(text);
   return {
     unknown: resolved.unknown,
+    ambiguous: resolved.ambiguous,
     sections: resolved.sections.map((s) => ({
       key: s.key,
       cards: s.cards.map((line) => ({
         qty: line.qty,
         name: line.card ? line.card.name : line.name,
         cardId: line.card ? idByName.get(normalizeName(line.card.name)) || null : null,
+        // Nom écrit sans sous-titre (« Fiora ») rattaché par repli : `candidates` = noms complets possibles.
+        ...(line.ambiguous ? { ambiguous: true, written: line.name, candidates: line.candidates } : {}),
       })),
     })),
   };

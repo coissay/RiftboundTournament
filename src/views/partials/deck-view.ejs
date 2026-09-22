@@ -3,7 +3,13 @@
    highlight (optionnel : { [nom en minuscules]: 'in' | 'out' } → badge sur la vignette, ex. side deck) */
 const isCompact = typeof compact !== 'undefined' && compact;
 const hl = typeof highlight !== 'undefined' && highlight ? highlight : null;
-const mark = (line) => (hl ? hl[(line.card ? line.card.name : line.name).toLowerCase()] || null : null);
+// Le side deck peut avoir été enregistré avec le nom nu (« fiora ») : on essaie aussi le nom de base de la carte.
+const mark = (line) => {
+  if (!hl) return null;
+  const c = line.card;
+  return hl[(c ? c.name : line.name).toLowerCase()] || (c && c.baseName ? hl[c.baseName.toLowerCase()] : null) || null;
+};
+const ambiguousTitle = (line) => `Nom ambigu : précise le sous-titre (${(line.candidates || []).join(' / ')})`;
 %>
 <% if (resolved.empty) { %>
   <div class="deck-view-empty muted">Colle ta decklist pour voir le deck apparaître ici.</div>
@@ -30,7 +36,7 @@ const mark = (line) => (hl ? hl[(line.card ? line.card.name : line.name).toLower
         <% if (resolved.domains.length) { %>
           <div><% for (const dom of resolved.domains) { %><span class="domain domain-<%= dom.toLowerCase() %>"><%= dom %></span><% } %></div>
         <% } %>
-        <div class="muted"><%= resolved.total %> carte(s) hors réserve<% if (resolved.unknown) { %> · <span class="warn">⚠ <%= resolved.unknown %> non reconnue(s)</span><% } %></div>
+        <div class="muted"><%= resolved.total %> carte(s) hors réserve<% if (resolved.unknown) { %> · <span class="warn">⚠ <%= resolved.unknown %> non reconnue(s)</span><% } %><% if (resolved.ambiguous) { %> · <span class="warn" title="Plusieurs cartes portent ce nom : précise le sous-titre (ex. « Fiora, Peerless »)">⚠ <%= resolved.ambiguous %> nom(s) ambigu(s)</span><% } %></div>
       </div>
     </div>
 
@@ -41,9 +47,10 @@ const mark = (line) => (hl ? hl[(line.card ? line.card.name : line.name).toLower
           <% for (const line of s.cards) { %>
             <% if (line.card && line.card.image) { %>
               <% const m = mark(line); %>
-              <a href="<%= line.card.image %>" target="_blank" rel="noopener" class="card-thumb<%= m ? ' card-sided card-sided-' + m : '' %>" data-full="<%= line.card.image %>" title="<%= line.card.name %> · <%= line.card.publicCode %><%= m === 'in' ? ' · entrée par side' : m === 'out' ? ' · sortie par side' : '' %>">
+              <a href="<%= line.card.image %>" target="_blank" rel="noopener" class="card-thumb<%= m ? ' card-sided card-sided-' + m : '' %>" data-full="<%= line.card.image %>" title="<%= line.card.name %> · <%= line.card.publicCode %><%= m === 'in' ? ' · entrée par side' : m === 'out' ? ' · sortie par side' : '' %><%= line.ambiguous ? ' · ' + ambiguousTitle(line) : '' %>">
                 <img src="<%= thumb(line.card.image, s.key === 'battlefields' ? 400 : 250) %>" alt="<%= line.card.name %>" loading="lazy">
                 <span class="qty">×<%= line.qty %></span>
+                <% if (line.ambiguous) { %><span class="sided-badge warn" style="background:#fbbf24;color:#111" title="<%= ambiguousTitle(line) %>">?</span><% } %>
                 <% if (m) { %><span class="sided-badge"><%= m === 'in' ? 'IN' : 'OUT' %></span><% } %>
               </a>
             <% } else { %>

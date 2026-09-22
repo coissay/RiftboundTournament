@@ -408,6 +408,7 @@
     d.notes = init.notes || '';
     d.domains = init.domains || [];
     d.sections = Core.fromResolved(init.sections);
+    warnAmbiguous(init.sections);
     return d;
   }
 
@@ -741,6 +742,13 @@
     form.submit();
   }
 
+  /** Lignes écrites sans sous-titre (« 3 Fiora ») rattachées par défaut à l'une des cartes « Fiora, … » : on prévient. */
+  function warnAmbiguous(sections) {
+    const lines = [];
+    for (const s of sections || []) for (const l of s.cards || []) if (l.ambiguous) lines.push(`« ${l.written} » → ${l.name} (possible : ${(l.candidates || []).join(' / ')})`);
+    if (lines.length) toast(`⚠ Nom ambigu, précise le sous-titre : ${lines.join(' ; ')}`);
+  }
+
   async function importDecklist() {
     const text = els.importText.value.trim();
     els.importError.hidden = true;
@@ -758,6 +766,7 @@
       renderDeck();
       els.importDialog.close();
       els.importText.value = '';
+      warnAmbiguous(data.sections);
       // Les lignes non reconnues (data.unknown) sont conservées telles quelles : affichées avec ⚠, exportées à l'identique.
     } catch (e) {
       els.importError.textContent = 'Import impossible : ' + e.message;

@@ -10,7 +10,8 @@ const API_PATH = '/publishing-content/v2.0/public/channel/riftbound_website/list
 const LOCALE = process.env.CARDS_LOCALE || 'en_US';
 const REFRESH_MS = 24 * 3600 * 1000;
 // À incrémenter quand la forme des cartes/méta stockées change : force un rechargement depuis l'API.
-const CATALOG_VERSION = 2;
+// v3 : `name` = nom complet imprimé (« Fiora, Peerless »), + `baseName` / `subtitle`.
+const CATALOG_VERSION = 3;
 
 export const SECTIONS = [
   { key: 'legend', label: 'Légende', headers: ['legend', 'legende', 'légende'] },
@@ -25,6 +26,7 @@ const state = {
   cards: [],
   meta: { domains: [], types: [], rarities: [], sets: [] },
   byName: new Map(),
+  byBaseName: new Map(), // nom nu (« fiora ») -> cartes « Fiora, … », repli ambigu (voir lookup)
   fetchedAt: null,
   source: null,
   error: null,
@@ -44,11 +46,25 @@ export function normalizeName(s) {
     .trim();
 }
 
+/**
+ * Nom complet imprimé sur la carte, qui identifie la carte (toutes impressions confondues).
+ * L'API sépare `name` (« Fiora ») et `subtitle` (« Peerless », « Victorious »…) : pour les unités,
+ * le sous-titre fait partie du nom (« Fiora, Peerless » et « Fiora, Victorious » sont deux cartes
+ * différentes). Pour les sorts « signature » et les légendes de starter, `subtitle` n'est qu'une
+ * annotation (champion associé, « Starter ») et ne fait pas partie du nom.
+ */
+function fullName(c, types) {
+  const subtitle = typeof c.subtitle === 'string' ? c.subtitle.trim() : '';
+  return subtitle && types[0] === 'unit' ? `${c.name}, ${subtitle}` : c.name;
+}
+
 function slimCard(c) {
   const types = (c.cardType?.type || []).map((t) => t.id);
   return {
     id: c.id,
-    name: c.name,
+    name: fullName(c, types),
+    baseName: c.name,
+    subtitle: c.subtitle || null,
     publicCode: c.publicCode,
     set: c.set?.value?.id || null,
     collectorNumber: c.collectorNumber ?? null,
@@ -81,6 +97,7 @@ function addIndex(map, key, card) {
 
 function buildIndex(cards) {
   const byName = new Map();
+  const byBaseName = new Map();
   for (const c of cards) {
     addIndex(byName, normalizeName(c.name), c);
     // Les légendes s'appellent « Rogue Assassin » avec le tag « Akali » ;
@@ -88,15 +105,22 @@ function buildIndex(cards) {
     if (c.type === 'legend') {
       for (const tag of c.tags) addIndex(byName, normalizeName(`${tag}, ${c.name}`), c);
     }
+    // « Fiora » seul (sans sous-titre) : repli ambigu vers l'une des cartes « Fiora, … »,
+    // uniquement si aucune carte ne porte exactement ce nom.
+    if (c.baseName && c.baseName !== c.name) addIndex(byBaseName, normalizeName(c.baseName), c);
   }
-  for (const list of byName.values()) list.sort((a, b) => rankCard(a) - rankCard(b));
-  return byName;
+  for (const key of byBaseName.keys()) if (byName.has(key)) byBaseName.delete(key);
+  // Départage déterministe (l'ordre de l'API varie d'un chargement à l'autre).
+  const byRank = (a, b) => rankCard(a) - rankCard(b) || String(a.publicCode).localeCompare(String(b.publicCode));
+  for (const list of byName.values()) list.sort(byRank);
+  for (const list of byBaseName.values()) list.sort(byRank);
+  return { byName, byBaseName };
 }
 
 function setCards(cards, fetchedAt, source, meta) {
   state.cards = cards;
   if (meta) state.meta = meta;
-  state.byName = buildIndex(cards);
+  ({ byName: state.byName, byBaseName: state.byBaseName } = buildIndex(cards));
   state.fetchedAt = fetchedAt;
   state.source = source;
 }
@@ -196,29 +220,48 @@ export function catalogMeta() {
 
 // ---------- Recherche ----------
 
-export function findCard(name, { type } = {}) {
+/**
+ * Résolution d'un nom de carte : `{ card, ambiguous, candidates }` ou null.
+ * `ambiguous` = la carte a été choisie par repli sur le nom nu (« Fiora » -> « Fiora, Victorious »
+ * parmi Peerless / Victorious / Worthy) ; `candidates` liste alors les noms complets possibles.
+ * Les objets carte du catalogue ne sont jamais modifiés.
+ */
+function lookup(name, { type } = {}) {
   const key = normalizeName(name);
   if (!key) return null;
-  const pick = (list) => {
-    if (!list || !list.length) return null;
-    if (type) return list.find((c) => c.type === type) || null;
-    return list[0];
+  const filtered = (list) => (list && type ? list.filter((c) => c.type === type) : list) || [];
+  const exact = (k) => {
+    const list = filtered(state.byName.get(k));
+    return list.length ? { card: list[0], ambiguous: false } : null;
   };
-  let hit = pick(state.byName.get(key));
+  const fallback = (k) => {
+    const list = filtered(state.byBaseName.get(k));
+    if (!list.length) return null;
+    const candidates = [...new Set(list.map((c) => c.name))];
+    return { card: list[0], ambiguous: candidates.length > 1, candidates };
+  };
+  let hit = exact(key);
   if (hit) return hit;
-  // « Akali, Rogue Assassin » -> « Rogue Assassin » (légendes) ; « Nom (précision) » -> « Nom ».
+  // « Nom (précision) » / « Fiora, Peerless (SFD-110) » -> « Fiora, Peerless », avant tout repli ambigu
+  // (sur le nom brut : normalizeName remplace les parenthèses par des espaces, le suffixe ne serait plus repérable).
+  const noParen = String(name).replace(/\s*\([^)]*\)\s*$/, '').trim();
+  if (noParen && noParen !== String(name).trim()) return lookup(noParen, { type });
   if (key.includes(',')) {
+    // « Akali, Rogue Assassin » -> « Rogue Assassin » (légendes).
     const after = key.split(',').slice(1).join(',').trim();
-    hit = pick(state.byName.get(after));
-    if (hit && hit.type === 'legend') return hit;
-    // Ou l'inverse : un nom écrit sans son sous-titre.
+    hit = exact(after);
+    if (hit && hit.card.type === 'legend') return hit;
+    // Ou l'inverse : un sous-titre inconnu (« Fiora, Victorius ») -> repli sur « Fiora ».
     const before = key.split(',')[0].trim();
-    hit = pick(state.byName.get(before));
+    hit = exact(before) || fallback(before);
     if (hit) return hit;
   }
-  const noParen = key.replace(/\s*\([^)]*\)\s*$/, '').trim();
-  if (noParen !== key) return pick(state.byName.get(noParen));
-  return null;
+  // Nom nu d'une carte à sous-titre (« Fiora ») : repli ambigu vers « Fiora, … ».
+  return fallback(key);
+}
+
+export function findCard(name, opts) {
+  return lookup(name, opts)?.card || null;
 }
 
 export function searchCards(query, limit = 20) {
@@ -286,16 +329,24 @@ export function parseDecklist(text) {
 
 const DOMAIN_LABELS = { fury: 'Fury', calm: 'Calm', mind: 'Mind', body: 'Body', chaos: 'Chaos', order: 'Order' };
 
+/**
+ * Résout une decklist texte. Chaque ligne : `{ qty, name, card }` (+ `ambiguous: true` et
+ * `candidates: [noms complets]` quand le nom écrit sans sous-titre a été rattaché par repli à l'une
+ * de plusieurs cartes, ex. « 3 Fiora »). `unknown` / `ambiguous` = nombre de lignes concernées.
+ */
 export function resolveDecklist(text) {
   const parsed = parseDecklist(text);
   let unknown = 0;
+  let ambiguous = 0;
   let total = 0;
   const sections = parsed
     .map((s) => {
       const cards = s.cards.map((line) => {
-        const card = findCard(line.name, { type: DEFAULT_TYPE_FOR_SECTION[s.key] }) || findCard(line.name);
+        const hit = lookup(line.name, { type: DEFAULT_TYPE_FOR_SECTION[s.key] }) || lookup(line.name);
+        const card = hit?.card || null;
         if (!card) unknown++;
-        return { ...line, card };
+        if (hit?.ambiguous) ambiguous++;
+        return hit?.ambiguous ? { ...line, card, ambiguous: true, candidates: hit.candidates } : { ...line, card };
       });
       const count = cards.reduce((n, c) => n + c.qty, 0);
       if (s.key !== 'sideboard') total += count;
@@ -322,6 +373,7 @@ export function resolveDecklist(text) {
     sections,
     total,
     unknown,
+    ambiguous,
     empty: sections.length === 0,
     legend: legendLine ? legendCard && legendCard.tags.length ? `${legendCard.tags[0]}, ${legendCard.name}` : legendLine.name : '',
     legendCard,
@@ -350,11 +402,6 @@ function numericValue(v) {
 
 let clientCatalogCache = { fetchedAt: null, cards: null };
 
-/**
- * Catalogue allégé pour le deckbuilder côté client : une seule impression par nom (l'impression
- * « de base » de préférence), sans les jetons (cartes sans type) ni les cartes sans image.
- * Le résultat est mémorisé jusqu'au prochain rafraîchissement du catalogue.
- */
 /** Libellé d'une impression alternative d'après son identifiant, sa rareté et l'impression principale. */
 function variantLabel(c, primary) {
   if (c.rarity === 'showcase') return 'Showcase';
@@ -369,9 +416,12 @@ function variantLabel(c, primary) {
 }
 
 /**
- * Catalogue pour le deckbuilder : toutes les impressions avec image, dont une « principale » par nom
- * (`primary: true`, impression de base préférée) ; les autres sont des variantes (`variant: true`,
- * `variantOf` = id de la principale, `variantLabel`).
+ * Catalogue pour le deckbuilder : toutes les impressions avec image (sans les jetons, cartes sans type),
+ * dont une « principale » par nom complet (`primary: true`, impression de base préférée) ; les autres
+ * sont des variantes (`variant: true`, `variantOf` = id de la principale, `variantLabel`).
+ * Le regroupement se fait sur `name` (nom complet, sous-titre inclus pour les unités) : « Fiora, Peerless »
+ * et « Fiora, Victorious » sont deux cartes distinctes, « Fiora, Peerless » SFD-110 et SFD-110a une seule.
+ * Le résultat est mémorisé jusqu'au prochain rafraîchissement du catalogue.
  */
 export function catalogForClient() {
   if (clientCatalogCache.cards && clientCatalogCache.fetchedAt === state.fetchedAt) return clientCatalogCache.cards;
@@ -443,14 +493,28 @@ export function serializeDecklist(sections) {
 export function applySiding(text, { out = [], in: inn = [] }) {
   const sections = parseDecklist(text);
   const get = (key) => sections.find((s) => s.key === key).cards;
+  // Même carte écrite différemment : nom exact, ou même carte du catalogue (code de collection, tag de
+  // légende…), ou nom nu d'un ancien side deck (« Fiora ») face au nom complet du deck (« Fiora, Peerless »).
+  const sameLine = (a, b) => {
+    if (normalizeName(a) === normalizeName(b)) return true;
+    const ca = findCard(a);
+    const cb = findCard(b);
+    if (ca && cb && ca.name === cb.name) return true;
+    const bare = (card, other) => !!card && card.baseName !== card.name && normalizeName(card.baseName) === normalizeName(other);
+    return bare(ca, b) || bare(cb, a);
+  };
+  const findLine = (lines, name) => lines.find((l) => normalizeName(l.name) === normalizeName(name)) || lines.find((l) => sameLine(l.name, name));
   const move = (from, to, list) => {
     for (const c of list) {
-      const src = from.find((l) => normalizeName(l.name) === normalizeName(c.name));
+      const src = findLine(from, c.name);
       const qty = Math.min(c.qty, src ? src.qty : c.qty);
       if (src) src.qty -= qty;
-      const dst = to.find((l) => normalizeName(l.name) === normalizeName(c.name));
+      // Destination cherchée avec le nom de la ligne source (complet) : « Fiora » sorti de « Fiora, Peerless »
+      // ne doit pas fusionner avec un « Fiora, Victorious » déjà en réserve.
+      const name = src ? src.name : c.name;
+      const dst = findLine(to, name);
       if (dst) dst.qty += qty;
-      else to.push({ qty, name: src ? src.name : c.name });
+      else to.push({ qty, name });
     }
     for (let i = from.length - 1; i >= 0; i--) if (from[i].qty <= 0) from.splice(i, 1);
   };

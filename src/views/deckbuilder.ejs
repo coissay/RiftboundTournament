@@ -145,8 +145,8 @@
 </form>
 
 <script>
-  // Deck existant à charger (via ?deck=<id>), ou null. `<` échappé pour ne pas fermer le script.
-  window.DECKBUILDER_INIT = <%- JSON.stringify(init).replace(/</g, '\\u003c') %>;
+  // Deck existant à charger (via ?deck=<id>), ou null. jsonForScript échappe `<` et U+2028/2029.
+  window.DECKBUILDER_INIT = <%- jsonForScript(init) %>;
 </script>
 <script src="/deckbuilder.js"></script>
 <%- include('partials/foot') %>
