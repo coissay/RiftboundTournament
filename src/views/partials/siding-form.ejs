@@ -1,12 +1,14 @@
 <%
 /* Formulaire de side deck pour UNE manche.
    Attend : n, mine (side déjà noté ou null), prev (side de la manche précédente, pour préremplir),
-   tournament, round, match, myDeckLines, cardImage, noHeading (bool, optionnel). */
+   tournament, round, match, myDeckLines, cardImage, noHeading (bool, optionnel),
+   action (URL du POST, optionnelle : par défaut la route de la table de tournoi). */
 const base = mine || prev;
+const actionUrl = (typeof action !== 'undefined' && action) || `/tournaments/${tournament._id}/rounds/${round.number}/tables/${match.table}/siding`;
 const outQty = Object.fromEntries((base ? base.out : []).map(c => [c.name, c.qty]));
 const inQty = Object.fromEntries((base ? base.in : []).map(c => [c.name, c.qty]));
 %>
-<form method="post" action="/tournaments/<%= tournament._id %>/rounds/<%= round.number %>/tables/<%= match.table %>/siding" class="siding-form-body">
+<form method="post" action="<%= actionUrl %>" class="siding-form-body">
   <input type="hidden" name="game" value="<%= n %>">
   <% if (!mine && prev) { %><p class="muted">Prérempli d'après ta manche précédente — ajuste puis enregistre.</p><% } %>
   <% if (myDeckLines && (myDeckLines.main.length || myDeckLines.sideboard.length)) { %>

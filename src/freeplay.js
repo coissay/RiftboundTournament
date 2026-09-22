@@ -4,15 +4,28 @@
 // d'un joueur en 1v1v1, 4 en 1v1v1v1, 2 côtés de deux joueurs en 2v2. Chaque manche (gameResults)
 // vaut l'index du côté vainqueur ou 'draw'. Le résultat du match est recalculé
 // après chaque manche : le côté qui a le plus de manches gagne, égalité en tête = nul.
+//
+// En pod (3 ou 4 côtés), une égalité en tête au bout du Bo n'est pas un résultat :
+// des manches de départage sont jouées jusqu'à ce qu'un seul côté soit en tête
+// (avec un plafond de sécurité, voir `maxGames`). En 1v1 / 2v2, le nul au bout du Bo
+// reste un résultat légitime.
 
+import crypto from 'node:crypto';
 import { playedVersion } from './deckversions.js';
+
+export const POD_NOTE = 'En Bo3/Bo5, une manche de départage est jouée en cas d’égalité en tête.';
 
 export const FORMATS = {
   '1v1': { label: '1v1', sides: 2, perSide: 1, description: 'Duel classique' },
-  '1v1v1': { label: '1v1v1', sides: 3, perSide: 1, description: 'Mêlée à trois' },
-  '1v1v1v1': { label: '1v1v1v1', sides: 4, perSide: 1, description: 'Free for all à quatre' },
+  '1v1v1': { label: '1v1v1', sides: 3, perSide: 1, description: 'Mêlée à trois', note: POD_NOTE },
+  '1v1v1v1': { label: '1v1v1v1', sides: 4, perSide: 1, description: 'Free for all à quatre', note: POD_NOTE },
   '2v2': { label: '2v2', sides: 2, perSide: 2, description: 'Deux équipes de deux' },
 };
+
+// Pod = plus de deux côtés (1v1v1, 1v1v1v1) : c'est là que le départage s'applique.
+export function isPod(match) {
+  return formatOf(match).sides > 2;
+}
 
 export function formatOf(match) {
   return FORMATS[match.format] || FORMATS['1v1'];
@@ -44,12 +57,44 @@ export function resultOf(match) {
   return leaders === 1 ? wins.indexOf(max) : 'draw';
 }
 
+// Nombre maximal de manches : le Bo, plus autant de manches de départage que de
+// côtés en pod. Au-delà, le match se clôture au score même si l'égalité persiste.
+export function maxGames(match) {
+  const bestOf = match.bestOf || 1;
+  return isPod(match) ? bestOf + formatOf(match).sides : bestOf;
+}
+
 // Le match est décidé quand un côté atteint le nombre de manches requis ou que
-// toutes les manches du Bo sont jouées.
+// toutes les manches du Bo sont jouées. En pod, il faut en plus un seul côté en tête ;
+// sinon on continue (manches de départage) jusqu'au plafond `maxGames`.
 export function isDecided(match) {
   const bestOf = match.bestOf || 1;
   const { wins, played } = gamesOf(match);
-  return played >= bestOf || wins.some((w) => w >= winsNeeded(bestOf));
+  if (!isPod(match)) return played >= bestOf || wins.some((w) => w >= winsNeeded(bestOf));
+  if (played >= maxGames(match)) return true;
+  const max = Math.max(...wins);
+  const singleLeader = wins.filter((w) => w === max).length === 1;
+  return singleLeader && (max >= winsNeeded(bestOf) || played >= bestOf);
+}
+
+// Vrai quand un pod a épuisé son Bo sans côté seul en tête : la prochaine manche est
+// une manche de départage.
+export function tiebreakPending(match) {
+  return isPod(match) && gamesOf(match).played >= (match.bestOf || 1) && !isDecided(match);
+}
+
+// Tous les joueurs du match, tous côtés confondus.
+export function allPlayers(match) {
+  return (match.sides || []).flatMap((s) => s.players || []);
+}
+
+// Tire au sort le premier joueur de la manche 1, uniformément parmi tous les joueurs
+// (en 2v2, c'est son équipe qui commence). Renvoie { userId, username } ou null.
+export function pickFirstPlayer(match) {
+  const players = allPlayers(match);
+  if (players.length === 0) return null;
+  const p = players[crypto.randomInt(players.length)];
+  return { userId: p.userId, username: p.username };
 }
 
 export function sideName(side) {

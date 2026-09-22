@@ -1,11 +1,20 @@
 import { Router } from 'express';
 import { oid } from '../db.js';
 import { requireAuth, flashAndRedirect, isAdmin } from '../middleware.js';
-import { FORMATS, formatOf, gamesOf, resultOf, isDecided, sideName, participantIds, computeStats } from '../freeplay.js';
-import { currentVersion } from '../deckversions.js';
+import { FORMATS, formatOf, gamesOf, resultOf, isDecided, tiebreakPending, maxGames, pickFirstPlayer, allPlayers, sideName, participantIds, computeStats } from '../freeplay.js';
+import { currentVersion, ensureVersioned } from '../deckversions.js';
+import { normalizeEmail, isEmail, findOrCreateGuest, versionAtDate } from '../guests.js';
+import { normalizeSiding, sidingGamesFor, deckLinesFor, sidedDeckFor, baseDeckFor, sidingFromBody, isEmptySiding, sideSummary } from '../siding.js';
+import { cardImageByName, thumb } from '../cards.js';
+import { mailConfigured } from '../mailer.js';
+import { sendGuestInvite } from '../invites.js';
+import { createRateLimiter } from '../ratelimit.js';
 
 const router = Router();
 const COLL = 'free_matches';
+
+// Ajout de joueurs sans compte : au plus 10 par utilisateur et par heure (best-effort, en mémoire).
+const guestLimiter = createRateLimiter({ max: 10, windowMs: 3600 * 1000 });
 
 function parseFormat(value) {
   return FORMATS[value] ? value : null;
@@ -29,6 +38,18 @@ function isOwner(match, user) {
 function canReport(match, user) {
   if (!user || match.status !== 'en_cours') return false;
   return isOwner(match, user) || participantIds(match).includes(user.id);
+}
+
+// Side deck : visible de tous une fois le match clôturé, sinon seulement de son auteur.
+function sidingVisible(match, ownerId, viewer) {
+  return match.status === 'terminé' || (!!viewer && String(ownerId) === viewer.id);
+}
+
+// Déclarer / changer le deck joué par `targetId` : le joueur lui-même, ou le créateur du
+// match / un admin pour n'importe quel participant (invités sans compte, notamment).
+function canSetDeck(match, user, targetId) {
+  if (!user || !participantIds(match).includes(targetId)) return false;
+  return user.id === targetId || isOwner(match, user);
 }
 
 // ---- Liste ----
@@ -60,6 +81,7 @@ async function renderForm(req, res, values = {}) {
     users: users.map((u) => ({ id: String(u._id), username: u.username })),
     decksByOwner,
     FORMATS,
+    mailConfigured: mailConfigured(),
     values: { format: '1v1', bestOf: 3, ...values },
   });
 }
@@ -120,6 +142,7 @@ router.post('/free-play/new', requireAuth, async (req, res, next) => {
       creatorId: oid(req.session.user.id),
       creatorName: req.session.user.username,
       sides,
+      firstPlayer: pickFirstPlayer({ sides }), // tiré au sort parmi tous les joueurs ; en 2v2 son équipe commence
       gameResults: [],
       result: null,
       createdAt: new Date(),
@@ -127,6 +150,38 @@ router.post('/free-play/new', requireAuth, async (req, res, next) => {
     flashAndRedirect(req, res, 'success', `Match ${spec.label} créé, à vous de jouer !`, `/free-play/${insertedId}`);
   } catch (err) {
     next(err);
+  }
+});
+
+// ---- Ajout d'un joueur sans compte depuis le formulaire de création (appel fetch) ----
+// Même mécanique que l'organisateur de tournoi (routes/tournaments.js) : l'invité
+// existe dans `users` avec `guest: true` et reçoit un lien pour réclamer son compte.
+// Réponse JSON pour que le formulaire garde ses places déjà remplies. Toujours du JSON,
+// même en erreur (jamais err.message). JSON exigé en entrée : sans CORS, un formulaire
+// cross-site ne peut pas forger ce Content-Type.
+// Le lien d'invitation n'est renvoyé qu'à celui qui CRÉE l'invité : un invité déjà connu
+// est simplement proposé, sans lien ni renvoi de mail (sinon n'importe quel compte connaissant
+// l'e-mail pourrait récupérer le jeton et réclamer le compte).
+router.post('/free-play/guests', requireAuth, async (req, res) => {
+  try {
+    if (!req.is('application/json')) return res.status(415).json({ error: 'JSON attendu' });
+    const username = String(req.body.username || '').trim().slice(0, 40);
+    const email = normalizeEmail(req.body.email);
+    if (username.length < 2) return res.status(400).json({ error: 'Pseudo du joueur requis (min 2 car.).' });
+    if (!isEmail(email)) return res.status(400).json({ error: 'Adresse e-mail invalide.' });
+    if (!guestLimiter.take(req.session.user.id)) return res.status(429).json({ error: 'Trop de joueurs ajoutés, réessaie plus tard.' });
+    const { user, created, error } = await findOrCreateGuest(req.db, { username, email });
+    if (error) return res.status(400).json({ error });
+    const payload = { ok: true, user: { _id: String(user._id), username: user.username }, created, guest: !!user.guest, mailSent: false };
+    // Compte existant (e-mail déjà rattaché) ou invité déjà connu : proposé tel quel, sans invitation.
+    if (!user.guest || !created) return res.json(payload);
+    const { sent, link } = await sendGuestInvite(req, user, { context: 'une partie libre (free play)' });
+    res.json({ ...payload, mailSent: sent, ...(sent ? {} : { inviteLink: link }) });
+  } catch (err) {
+    // Course entre deux créations simultanées : index unique username / email.
+    if (err && err.code === 11000) return res.status(409).json({ error: 'Pseudo ou e-mail déjà utilisé.' });
+    console.error('POST /free-play/guests', err);
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -142,26 +197,159 @@ router.get('/free-play/stats', async (req, res, next) => {
   }
 });
 
+// Matchs d'avant le tirage du premier joueur : on le tire à la première consultation et
+// on le fige en base — seulement si le match n'a pas commencé (en cours, aucune manche) ;
+// sinon on fige `null` : inventer un « tiré au sort » après coup n'aurait pas de sens.
+// Le filtre `$exists: false` garantit qu'un seul tirage l'emporte si deux personnes
+// ouvrent la page en même temps ; le perdant relit la valeur fixée.
+async function ensureFirstPlayer(db, match) {
+  if (match.firstPlayer !== undefined) return;
+  const fresh_ = match.status === 'en_cours' && (match.gameResults || []).length === 0;
+  const drawn = fresh_ ? pickFirstPlayer(match) : null;
+  const { matchedCount } = await db.collection(COLL).updateOne({ _id: match._id, firstPlayer: { $exists: false } }, { $set: { firstPlayer: drawn } });
+  if (matchedCount === 1) {
+    match.firstPlayer = drawn;
+  } else {
+    const fresh = await db.collection(COLL).findOne({ _id: match._id }, { projection: { firstPlayer: 1 } });
+    match.firstPlayer = fresh?.firstPlayer ?? null;
+  }
+}
+
 // ---- Page match ----
 router.get('/free-play/:id', async (req, res, next) => {
   try {
     const match = await loadMatch(req, res);
     if (!match) return;
+    await ensureFirstPlayer(req.db, match);
     // Bilan free play de chaque participant dans ce format, façon record V-N-D des pairings.
     const ids = participantIds(match).map((id) => oid(id));
     const others = await req.db.collection(COLL).find({ status: 'terminé', format: match.format, 'sides.players.userId': { $in: ids } }).toArray();
-    const { players } = computeStats(others, { format: match.format });
-    const recordOf = Object.fromEntries(players.map((p) => [p.userId, `${p.wins}-${p.draws}-${p.losses}`]));
+    const { players: records } = computeStats(others, { format: match.format });
+    const recordOf = Object.fromEntries(records.map((p) => [p.userId, `${p.wins}-${p.draws}-${p.losses}`]));
+
+    // ---- Side decks : par joueur (clé userId), manche par manche ; sidables = [2..maxGames] (départage inclus), [1] en Bo1.
+    const viewer = req.session.user;
+    const players = allPlayers(match);
+    const me = viewer ? players.find((p) => String(p.userId) === viewer.id) || null : null;
+    const cap = maxGames(match);
+    const games = gamesOf(match);
+    const siding = {};
+    const visible = {};
+    const sidedDecks = {};
+    const baseDecks = {};
+    for (const p of players) {
+      const uid = String(p.userId);
+      siding[uid] = normalizeSiding((match.siding || {})[uid]);
+      visible[uid] = sidingVisible(match, uid, viewer);
+      sidedDecks[uid] = {};
+      if (visible[uid]) {
+        for (const [n, sd] of Object.entries(siding[uid].games)) {
+          if (sd.out.length || sd.in.length) sidedDecks[uid][n] = await sidedDeckFor(req.db, p, sd);
+        }
+      }
+      if (match.status === 'terminé') baseDecks[uid] = await baseDeckFor(req.db, p);
+    }
+
+    // ---- Deck joué, déclarable après coup : liste des decks de chaque joueur que le visiteur peut renseigner.
+    const editable = players.filter((p) => canSetDeck(match, viewer, String(p.userId))).map((p) => p.userId);
+    const deckDocs = editable.length
+      ? await req.db.collection('decks').find({ ownerId: { $in: editable } }, { projection: { name: 1, ownerId: 1 } }).sort({ name: 1 }).toArray()
+      : [];
+    const decksByPlayer = {};
+    for (const d of deckDocs) (decksByPlayer[String(d.ownerId)] ||= []).push({ id: String(d._id), name: d.name });
+    const canSetDeckOf = Object.fromEntries(players.map((p) => [String(p.userId), editable.includes(p.userId)]));
+
     res.render('freeplay/match', {
       match,
       spec: formatOf(match),
-      games: gamesOf(match),
+      games,
       decided: isDecided(match),
+      tiebreak: tiebreakPending(match),
+      maxGames: cap,
       recordOf,
       canReport: canReport(match, req.session.user),
       owner: isOwner(match, req.session.user),
       sideName,
+      // side deck
+      me,
+      siding,
+      sidingVisible: visible,
+      sidedDecks,
+      baseDecks,
+      sidingGames: sidingGamesFor(cap),
+      myDeckLines: me ? await deckLinesFor(req.db, me) : null,
+      mySiding: me ? siding[String(me.userId)] : null,
+      cardImage: cardImageByName,
+      thumb,
+      sideSummary,
+      // deck joué
+      decksByPlayer,
+      canSetDeckOf,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- Side deck d'une manche (joueur du match, pour lui-même ; corrigeable après coup) ----
+router.post('/free-play/:id/siding', requireAuth, async (req, res, next) => {
+  try {
+    const match = await loadMatch(req, res);
+    if (!match) return;
+    const url = `/free-play/${match._id}#side-deck`;
+    const me = allPlayers(match).find((p) => String(p.userId) === req.session.user.id);
+    if (!me) return flashAndRedirect(req, res, 'error', 'Seuls les joueurs du match peuvent noter leur side deck.', url);
+    const cap = maxGames(match);
+    const game = parseInt(req.body.game, 10);
+    if (!sidingGamesFor(cap).includes(game)) {
+      const allowed = cap < 2 ? 'la manche 1 (Bo1)' : `les manches 2 à ${cap} — la manche 1 se joue avec le deck inscrit`;
+      return flashAndRedirect(req, res, 'error', `Manche invalide : le side deck se note pour ${allowed}.`, url);
+    }
+    const sd = await sidingFromBody(req.db, me, req.body);
+    const uid = req.session.user.id;
+    const games = { ...normalizeSiding((match.siding || {})[uid]).games };
+    if (isEmptySiding(sd)) delete games[game];
+    else games[game] = { ...sd, updatedAt: new Date() };
+    const key = `siding.${uid}`;
+    await req.db.collection(COLL).updateOne({ _id: match._id }, Object.keys(games).length ? { $set: { [key]: { games } } } : { $unset: { [key]: '' } });
+    if (!games[game]) return flashAndRedirect(req, res, 'success', `Side deck de la manche ${game} effacé.`, url);
+    const hidden = match.status !== 'terminé' ? ' Il restera caché aux autres jusqu’à la clôture du match.' : '';
+    flashAndRedirect(req, res, 'success', `Side deck de la manche ${game} enregistré.` + hidden, url);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- Déclarer / changer le deck joué, même après coup (joueur lui-même, ou créateur / admin pour tout participant) ----
+router.post('/free-play/:id/deck', requireAuth, async (req, res, next) => {
+  try {
+    const match = await loadMatch(req, res);
+    if (!match) return;
+    const url = `/free-play/${match._id}`;
+    const targetId = String(req.body.userId || '');
+    if (!canSetDeck(match, req.session.user, targetId)) {
+      return flashAndRedirect(req, res, 'error', 'Tu peux déclarer ton propre deck ; seul le créateur du match (ou un admin) peut le faire pour un autre joueur.', url);
+    }
+    let i = -1;
+    let j = -1;
+    match.sides.forEach((s, si) => s.players.forEach((p, pj) => { if (String(p.userId) === targetId) { i = si; j = pj; } }));
+    const target = match.sides[i].players[j];
+    const prefix = `sides.${i}.players.${j}`;
+    if (!req.body.deckId) {
+      await req.db.collection(COLL).updateOne({ _id: match._id }, { $set: { [`${prefix}.deckId`]: null, [`${prefix}.deckName`]: null, [`${prefix}.deckVersion`]: null } });
+      return flashAndRedirect(req, res, 'success', `Deck retiré pour ${target.username}.`, url);
+    }
+    const deck = await req.db.collection('decks').findOne({ _id: oid(req.body.deckId), ownerId: oid(targetId) });
+    if (!deck) return flashAndRedirect(req, res, 'error', 'Choisis un deck appartenant à ce joueur.', url);
+    // Version du deck en vigueur à la date du match (le deck a pu être modifié depuis), pour des stats par version justes.
+    await ensureVersioned(req.db, deck);
+    const deckVersion = await versionAtDate(req.db, deck._id, match.date);
+    await req.db.collection(COLL).updateOne(
+      { _id: match._id },
+      { $set: { [`${prefix}.deckId`]: deck._id, [`${prefix}.deckName`]: deck.name, [`${prefix}.deckVersion`]: deckVersion } }
+    );
+    // Un side déjà noté reste stocké tel quel : il se relit par rapport au nouveau deck.
+    flashAndRedirect(req, res, 'success', `Deck « ${deck.name} » (v${deckVersion}) enregistré pour ${target.username}.`, url);
   } catch (err) {
     next(err);
   }

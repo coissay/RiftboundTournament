@@ -12,6 +12,7 @@
         <% } %>
       </select>
     </label>
+    <p class="form-hint muted" id="fp-format-note" hidden></p>
     <label>Format des manches
       <select name="bestOf">
         <option value="1" <%= values.bestOf == 1 ? 'selected' : '' %>>Best of 1 (une manche sèche)</option>
@@ -25,6 +26,17 @@
     <div id="fp-slots"></div>
     <p class="form-hint muted">Le deck est facultatif, mais sans deck le match ne compte pas dans les stats par deck.</p>
 
+    <details class="guest-add fp-guest-add" id="fp-guest">
+      <summary class="btn btn-ghost btn-small">+ Joueur sans compte</summary>
+      <div class="guest-form">
+        <label>Pseudo <input id="fp-guest-username" form="none" minlength="2" maxlength="40" placeholder="ex : Sam" autocomplete="off"></label>
+        <label>E-mail <input id="fp-guest-email" form="none" type="email" placeholder="sam@exemple.fr" autocomplete="off"></label>
+        <button type="button" class="btn btn-gold" id="fp-guest-add">Ajouter</button>
+      </div>
+      <p class="muted">Il/elle est ajouté·e à la liste des joueurs et reçoit un lien pour créer son compte et garder son historique<%= mailConfigured ? '' : ' (e-mail non configuré : le lien te sera affiché à transmettre)' %>. Sans compte, pas de deck à choisir pour cette place.</p>
+      <p class="fp-guest-msg" id="fp-guest-msg" hidden></p>
+    </details>
+
     <label>Note <input name="notes" maxlength="500" placeholder="ex : pause déj, test du nouveau deck…"></label>
 
     <div class="row-actions">
@@ -36,10 +48,10 @@
 
 <script>
   window.FP_FORM = {
-    formats: <%- JSON.stringify(Object.fromEntries(Object.entries(FORMATS).map(([k, s]) => [k, { sides: s.sides, perSide: s.perSide }]))) %>,
-    users: <%- JSON.stringify(users) %>,
-    decksByOwner: <%- JSON.stringify(decksByOwner) %>,
-    me: <%- JSON.stringify(currentUser ? currentUser.id : null) %>,
+    formats: <%- jsonForScript(Object.fromEntries(Object.entries(FORMATS).map(([k, s]) => [k, { sides: s.sides, perSide: s.perSide, note: s.note || null }]))) %>,
+    users: <%- jsonForScript(users) %>,
+    decksByOwner: <%- jsonForScript(decksByOwner) %>,
+    me: <%- jsonForScript(currentUser ? currentUser.id : null) %>,
   };
 </script>
 <script src="/freeplay-form.js"></script>

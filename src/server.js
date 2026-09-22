@@ -27,6 +27,9 @@ await migrateDecks(db); // decks d'avant les versions : v1 = cartes actuelles
 const app = express();
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+// JSON à insérer dans un <script> inline : JSON.stringify n'échappe ni « < » (fermeture de
+// balise → XSS stocké via un pseudo) ni U+2028/U+2029 (fin de ligne JS). À utiliser avec <%- %>.
+app.locals.jsonForScript = (x) => JSON.stringify(x).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 app.use(express.urlencoded({ extended: true, limit: '200kb' }));
 app.use(express.json({ limit: '200kb' }));
 app.use(express.static(path.join(__dirname, 'public')));

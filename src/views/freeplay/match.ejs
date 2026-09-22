@@ -12,6 +12,21 @@
   </p>
 
   <% const need = Math.ceil((match.bestOf || 1) / 2); %>
+  <% const firstId = match.firstPlayer ? String(match.firstPlayer.userId) : null; %>
+  <% const firstName = firstId ? (match.sides.flatMap((s) => s.players).find((p) => String(p.userId) === firstId) || match.firstPlayer).username : null; %>
+  <% const catchUp = me && match.status !== 'terminé' ? sidingGames.filter((n) => n <= games.played) : []; %>
+  <% const players = match.sides.flatMap((s) => s.players); const myId = me ? String(me.userId) : null; const sidingAction = `/free-play/${match._id}/siding`; %>
+  <% const sideLineOf = (p, n) => { const uid = String(p.userId); const sd = siding[uid].games[n]; return (uid === myId ? 'mon side' : p.username) + ' : ' + (sd ? (sidingVisible[uid] ? sideSummary(sd) : '🔒 side renseigné, visible à la clôture') : 'rien de noté'); }; %>
+  <% const prevSideOf = (n) => { let prev = null; for (let k = n - 1; k >= sidingGames[0] && !prev; k--) prev = mySiding.games[k] || null; return prev; }; %>
+  <% const iStart = !!(firstId && currentUser && firstId === currentUser.id); %>
+
+  <% if (tiebreak) { %>
+    <div class="callout callout-gold fp-tiebreak" role="status">
+      <span class="callout-icon" aria-hidden="true">⚖️</span>
+      <span><strong>Égalité en tête après <%= games.played %> manche<%= games.played > 1 ? 's' : '' %> :</strong> manche de départage — on continue jusqu'à ce qu'un seul côté soit en tête<%= games.played + 1 >= maxGames ? ' (dernière manche possible : le match se clôture ensuite au score)' : '' %>.</span>
+    </div>
+  <% } %>
+
   <div class="versus versus-<%= spec.sides %>">
     <% match.sides.forEach((side, i) => { %>
       <% if (i > 0) { %>
@@ -28,11 +43,30 @@
         <% for (const p of side.players) { %>
           <div class="fp-player">
             <a class="versus-name" href="/players/<%= p.userId %>"><%= p.username %></a>
+            <% if (firstId === String(p.userId)) { %><span class="tag tag-gold fp-first" title="Premier joueur de la manche 1"><%- include('../partials/icon', { name: 'dice' }) %> commence</span><% } %>
             <span class="muted">(<%= recordOf[String(p.userId)] || '0-0-0' %>)</span>
             <% if (p.deckName) { %>
-              <span class="muted deck-tag"><% if (p.deckId && currentUser) { %><a href="/decks/<%= p.deckId %>"><%= p.deckName %></a><% } else { %><%= p.deckName %><% } %></span>
+              <span class="muted deck-tag"><% if (p.deckId && currentUser) { %><a href="/decks/<%= p.deckId %>"><%= p.deckName %></a><% } else { %><%= p.deckName %><% } %><%= p.deckVersion ? ' v' + p.deckVersion : '' %></span>
             <% } else { %>
               <span class="muted deck-tag"><em>sans deck</em></span>
+            <% } %>
+            <% if (canSetDeckOf[String(p.userId)]) { const myDecks = decksByPlayer[String(p.userId)] || []; %>
+              <details class="fp-deck-edit">
+                <summary class="muted">✎ <%= p.deckName ? 'modifier le deck' : 'déclarer le deck' %></summary>
+                <% if (myDecks.length) { %>
+                  <form method="post" action="/free-play/<%= match._id %>/deck" class="fp-deck-form">
+                    <input type="hidden" name="userId" value="<%= p.userId %>">
+                    <select name="deckId">
+                      <option value="">— sans deck —</option>
+                      <% for (const d of myDecks) { %><option value="<%= d.id %>" <%= String(p.deckId) === d.id ? 'selected' : '' %>><%= d.name %></option><% } %>
+                    </select>
+                    <button class="btn btn-gold btn-small">Enregistrer</button>
+                  </form>
+                  <span class="muted">Version du deck à la date du match ; modifiable même après clôture.</span>
+                <% } else { %>
+                  <span class="muted">Aucun deck enregistré pour <%= String(p.userId) === currentUser.id ? 'toi' : p.username %><% if (String(p.userId) === currentUser.id) { %> — <a href="/decks">crée-en un</a><% } %>.</span>
+                <% } %>
+              </details>
             <% } %>
           </div>
         <% } %>
@@ -41,23 +75,44 @@
     <% }) %>
   </div>
 
+  <% if (match.firstPlayer) { %>
+    <p class="fp-first-line <%= iStart ? 'fp-first-me' : 'muted' %>">
+      <%- include('../partials/icon', { name: 'dice' }) %>
+      Premier joueur (manche 1) : <strong><%= firstName %></strong><%= spec.perSide > 1 ? ' — son équipe commence' : '' %><% if (iStart) { %> · <strong>Tu commences</strong><% } %>
+      <span class="muted">(tiré au sort)</span>
+    </p>
+  <% } %>
+
   <% if (spec.sides > 2 && games.draws) { %><p class="muted match-meta"><%= games.draws %> manche<%= games.draws > 1 ? 's' : '' %> nulle<%= games.draws > 1 ? 's' : '' %></p><% } %>
 
   <% if (games.played > 0) { %>
     <div class="manche-history">
-      <% match.gameResults.forEach((r, i) => { %>
+      <% match.gameResults.forEach((r, i) => { const n = i + 1; %>
         <div class="manche-line">
-          <span class="muted">Manche <%= i + 1 %></span>
+          <span class="muted">Manche <%= n %><%= n > (match.bestOf || 1) ? ' (départage)' : '' %></span>
           <% if (r === 'draw') { %><span class="result-chip draw">Nul</span>
           <% } else { %><span class="result-chip win">Victoire <%= sideName(match.sides[r]) %></span><% } %>
         </div>
+        <% const anySide = players.some((p) => siding[String(p.userId)].games[n]); %>
+        <% if (me || anySide) { %>
+        <div class="manche-side">
+          <% if (!sidingGames.includes(n)) { %><span class="muted">decks inscrits pour tout le monde</span>
+          <% } else { for (const p of players) { const uid = String(p.userId); const sd = siding[uid].games[n]; %>
+            <span class="manche-side-player"><span class="muted"><%= uid === myId ? 'Mon side' : p.username %> :</span>
+              <% if (!sd) { %><span class="muted">—</span>
+              <% } else if (!sidingVisible[uid]) { %><span class="muted">🔒 jusqu'à la clôture</span>
+              <% } else { %><%- include('../partials/siding-chips', { sd, sdk: sidedDecks[uid][n] || null, n, cardImage, thumb, inline: true }) %><% } %>
+            </span>
+          <% } } %>
+        </div>
+        <% } %>
       <% }) %>
     </div>
   <% } %>
 
   <% if (canReport && !decided) { %>
     <div class="manche-report">
-      <p class="manche-title">Manche <%= games.played + 1 %> — qui l'emporte ?</p>
+      <p class="manche-title">Manche <%= games.played + 1 %><%= tiebreak ? ' (départage)' : '' %> — qui l'emporte ?</p>
       <div class="report-buttons report-buttons-<%= spec.sides %>">
         <% match.sides.forEach((side, i) => { %>
           <form method="post" action="/free-play/<%= match._id %>/games">
@@ -70,8 +125,49 @@
           <button class="btn btn-report btn-draw-mid">Nul<span>Égalité</span></button>
         </form>
       </div>
-      <p class="muted">Première à <%= need %> manche<%= need > 1 ? 's' : '' %> gagnée<%= need > 1 ? 's' : '' %>. Le match se clôture tout seul une fois décidé ; sinon, « Clôturer au score » enregistre le score en l'état.</p>
+      <p class="muted">Première à <%= need %> manche<%= need > 1 ? 's' : '' %> gagnée<%= need > 1 ? 's' : '' %>.<%= spec.sides > 2 ? ' En cas d’égalité en tête au bout du Bo, une manche de départage est jouée.' : '' %> Le match se clôture tout seul une fois décidé ; sinon, « Clôturer au score » enregistre le score en l'état.</p>
+
+      <% const cur = games.played + 1; %>
+      <% if (sidingGames.includes(cur)) { %>
+        <% if (me) { const mine = mySiding.games[cur] || null; const prev = prevSideOf(cur); const others = players.filter((p) => String(p.userId) !== myId); %>
+          <details class="siding-panel siding-panel-current siding-current" id="<%= catchUp.length ? 'siding-form-current' : 'side-deck' %>">
+            <summary>
+              <span class="siding-panel-title">🔁 Mon side pour la manche <%= cur %></span>
+              <span class="siding-panel-summary">
+                <% if (mine) { %><%- include('../partials/siding-chips', { sd: mine, sdk: null, n: cur, cardImage, thumb, inline: true }) %>
+                <% } else { %><span class="muted">optionnel — aucun échange noté</span><% } %>
+              </span>
+              <span class="badge <%= mine ? 'badge-live' : 'badge-done' %>"><%= mine ? 'noté' : 'à noter' %></span>
+              <span class="muted siding-current-opp"><%= others.map((p) => sideLineOf(p, cur)).join(' · ') %></span>
+            </summary>
+            <div class="siding-panel-body">
+              <% if (mine && sidedDecks[myId][cur]) { const sdk = sidedDecks[myId][cur]; %>
+                <details class="sided-deck">
+                  <summary class="btn btn-ghost btn-small">🃏 Deck joué en manche <%= cur %> <span class="muted">(principal <%= sdk.mainCount %> · réserve <%= sdk.sideCount %>)</span></summary>
+                  <div class="sided-deck-view">
+                    <p class="muted"><span class="sided-badge sided-badge-inline sided-in">IN</span> entrée dans le deck principal, <span class="sided-badge sided-badge-inline sided-out">OUT</span> sortie en réserve, par rapport au deck inscrit.</p>
+                    <%- include('../partials/deck-view', { resolved: sdk.resolved, thumb, compact: true, highlight: sdk.highlight }) %>
+                  </div>
+                </details>
+              <% } %>
+              <%- include('../partials/siding-form', { n: cur, mine, prev, myDeckLines, cardImage, action: sidingAction }) %>
+            </div>
+          </details>
+        <% } else { %>
+          <div class="manche-side manche-side-current"><span class="muted">🔁 <%= players.map((p) => sideLineOf(p, cur)).join(' · ') %></span></div>
+        <% } %>
+      <% } %>
     </div>
+  <% } %>
+
+  <% if (catchUp.length) { %>
+    <details class="siding-form siding-form-after" id="side-deck">
+      <summary class="btn btn-ghost btn-small">🔁 Noter / corriger mes sides des manches déjà jouées</summary>
+      <% for (const n of catchUp) { const mine = mySiding.games[n] || null; %>
+        <h4>Manche <%= n %></h4>
+        <%- include('../partials/siding-form', { n, mine, prev: prevSideOf(n), myDeckLines, cardImage, action: sidingAction }) %>
+      <% } %>
+    </details>
   <% } %>
 
   <% if (match.status === 'terminé') { %>
@@ -109,5 +205,9 @@
     </div>
   <% } %>
 </div>
+
+<% if (match.status === 'terminé') { %>
+<%- include('_siding') %>
+<% } %>
 
 <%- include('../partials/foot') %>

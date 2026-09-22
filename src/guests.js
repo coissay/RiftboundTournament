@@ -50,7 +50,9 @@ export async function renameEverywhere(db, userId, username) {
   const matches = await db.collection('free_matches').find({ 'sides.players.userId': userId }).toArray();
   for (const m of matches) {
     for (const s of m.sides) for (const p of s.players) if (String(p.userId) === String(userId)) p.username = username;
-    await db.collection('free_matches').updateOne({ _id: m._id }, { $set: { sides: m.sides } });
+    const patch = { sides: m.sides };
+    if (m.firstPlayer && String(m.firstPlayer.userId) === String(userId)) patch.firstPlayer = { ...m.firstPlayer, username };
+    await db.collection('free_matches').updateOne({ _id: m._id }, { $set: patch });
   }
   await db.collection('decks').updateMany({ ownerId: userId }, { $set: { ownerName: username } });
 }
