@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { oid } from '../db.js';
 import { requireAuth, flashAndRedirect, isAdmin } from '../middleware.js';
 import { AUTO_CLOSE_DAYS } from '../housekeeping.js';
-import { computeStandings, pairRound, suggestedRounds, winsNeeded } from '../swiss.js';
+import { computeStandings, drawFirstPlayer, pairRound, suggestedRounds, winsNeeded } from '../swiss.js';
 import { currentVersion, playedVersion, ensureVersioned } from '../deckversions.js';
 import { resolveDecklist, parseDecklist, cardImageByName, applySiding, thumb } from '../cards.js';
 import { normalizeEmail, isEmail, findOrCreateGuest, newInviteToken, versionAtDate, setPlayedDeck } from '../guests.js';
@@ -435,8 +435,29 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
   try {
     const tournament = await loadTournament(req, res);
     if (!tournament) return;
-    const { round, match } = findMatch(tournament, parseInt(req.params.roundNumber, 10), parseInt(req.params.table, 10));
+    const { round, match, path } = findMatch(tournament, parseInt(req.params.roundNumber, 10), parseInt(req.params.table, 10));
     if (!match || match.bye) return res.status(404).render('error', { message: 'Match introuvable' });
+    // Matchs appariés avant l'ajout du tirage au sort (champ absent) : on tire le premier
+    // joueur à la première ouverture de la page, seulement si le match n'a pas commencé
+    // (sinon on n'invente pas un tirage après coup : on enregistre null). Écrit une seule
+    // fois grâce au filtre « champ encore absent », pour que deux joueurs ouvrant la page
+    // en même temps voient la même valeur.
+    if (match.firstPlayer === undefined) {
+      const g = match.games || {};
+      const started = tournament.status === 'terminé' || match.result != null || (match.gameResults || []).length > 0 || !!(g.p1 || g.p2 || g.draws);
+      const value = started ? null : drawFirstPlayer();
+      const { matchedCount } = await req.db.collection('tournaments').updateOne(
+        { _id: tournament._id, [`${path}.firstPlayer`]: { $exists: false } },
+        { $set: { [`${path}.firstPlayer`]: value } }
+      );
+      if (matchedCount === 1) {
+        match.firstPlayer = value;
+      } else {
+        // Quelqu'un d'autre vient d'écrire : on relit la valeur enregistrée.
+        const fresh = await req.db.collection('tournaments').findOne({ _id: tournament._id }, { projection: { rounds: 1 } });
+        match.firstPlayer = findMatch(fresh || tournament, round.number, match.table).match?.firstPlayer ?? null;
+      }
+    }
     // Record à l'entrée de cette ronde (et non le record final du tournoi).
     const standings = computeStandings(tournament, { beforeRound: round.number });
     const recordOf = Object.fromEntries(standings.map((s) => [s.userId, `${s.wins}-${s.draws}-${s.losses}`]));
@@ -619,6 +640,7 @@ router.post('/tournaments/:id/rounds/:roundNumber/tables/:table/reset', requireA
     if (!canReportMatch(tournament, round, match, req.session.user)) {
       return flashAndRedirect(req, res, 'error', 'Cette ronde n’est plus modifiable.', url);
     }
+    // Seule la saisie est remise à zéro : le tirage du premier joueur (firstPlayer) reste.
     await req.db.collection('tournaments').updateOne(
       { _id: tournament._id },
       {

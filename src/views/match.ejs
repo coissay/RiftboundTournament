@@ -80,6 +80,15 @@ const myNextOpp = myNext && !myNext.bye ? (String(myNext.p1.userId) === me0 ? my
   <div class="match-table-tile">
     <div class="my-match-table"><span>Table</span><b><%= match.table %></b></div>
     <span class="muted match-table-sub">Bo<%= tournament.bestOf || 1 %> · <%= mySide ? (mySide === 'p1' ? 'tu es à gauche' : 'tu es à droite') : 'ronde ' + round.number %></span>
+    <% const fp = match.firstPlayer === 'p1' || match.firstPlayer === 'p2' ? match.firstPlayer : null; %>
+    <% if (fp) { %>
+      <!-- Tirage au sort du joueur qui commence la manche 1 (les manches suivantes suivent la règle habituelle). -->
+      <div class="first-player" role="note">
+        <span class="first-player-icon" aria-hidden="true"><%- include('partials/icon', { name: 'dice' }) %></span>
+        <span>Premier joueur (manche 1) : <strong><%= match[fp].username %></strong></span>
+        <% if (mySide) { %><span class="first-player-me <%= mySide === fp ? 'is-me' : '' %>"><%= mySide === fp ? 'Tu commences' : 'Ton adversaire commence' %></span><% } %>
+      </div>
+    <% } %>
   </div>
 
   <% const g = match.games || { p1: 0, p2: 0, draws: 0 }; %>
@@ -92,6 +101,7 @@ const myNextOpp = myNext && !myNext.bye ? (String(myNext.p1.userId) === me0 ? my
     <div class="versus-side <%= match.result === 'p1' && decided ? 'versus-winner' : '' %>">
       <span class="avatar"><%= initial(match.p1.username) %></span>
       <span class="versus-name"><%= match.p1.username %><%= mySide === 'p1' ? ' (moi)' : '' %></span>
+      <% if (fp === 'p1') { %><span class="tag tag-gold first-marker" title="Commence la manche 1">⚄ commence</span><% } %>
       <span class="muted">(<%= recordOf[String(match.p1.userId)] || '0-0-0' %>)</span>
       <span class="muted deck-tag"><%= match.p1.deckName || 'deck non renseigné' %></span>
     </div>
@@ -103,6 +113,7 @@ const myNextOpp = myNext && !myNext.bye ? (String(myNext.p1.userId) === me0 ? my
     <div class="versus-side <%= match.result === 'p2' && decided ? 'versus-winner' : '' %>">
       <span class="avatar"><%= initial(match.p2.username) %></span>
       <span class="versus-name"><%= match.p2.username %><%= mySide === 'p2' ? ' (moi)' : '' %></span>
+      <% if (fp === 'p2') { %><span class="tag tag-gold first-marker" title="Commence la manche 1">⚄ commence</span><% } %>
       <span class="muted">(<%= recordOf[String(match.p2.userId)] || '0-0-0' %>)</span>
       <span class="muted deck-tag"><%= match.p2.deckName || 'deck non renseigné' %></span>
     </div>

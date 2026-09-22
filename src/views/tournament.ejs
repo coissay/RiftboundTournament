@@ -208,7 +208,7 @@ const initial = (s) => (s || '?').charAt(0);
             <a href="<%= matchUrl %>" class="pairing-player <%= m.result === 'p1' ? 'pp-winner' : '' %>">
               <span class="avatar"><%= initial(m.p1.username) %></span>
               <div class="pp-body">
-                <span class="pp-name"><%= m.p1.username %> <span class="pp-record">(<%= recordOf[String(m.p1.userId)] || '0-0-0' %>)</span><% if (sideOf(m.p1)) { %><span class="pp-side" title="Side deck noté">side</span><% } %></span>
+                <span class="pp-name"><%= m.p1.username %> <span class="pp-record">(<%= recordOf[String(m.p1.userId)] || '0-0-0' %>)</span><% if (m.firstPlayer === 'p1') { %><span class="pp-side pp-first" title="Commence la manche 1 (tirage au sort)">⚄ commence</span><% } %><% if (sideOf(m.p1)) { %><span class="pp-side" title="Side deck noté">side</span><% } %></span>
                 <span class="pp-deck"><%= m.p1.deckName || 'deck non renseigné' %></span>
               </div>
             </a>
@@ -227,7 +227,7 @@ const initial = (s) => (s || '?').charAt(0);
             <a href="<%= matchUrl %>" class="pairing-player right <%= m.result === 'p2' ? 'pp-winner' : '' %>">
               <span class="avatar"><%= initial(m.p2.username) %></span>
               <div class="pp-body">
-                <span class="pp-name"><% if (sideOf(m.p2)) { %><span class="pp-side" title="Side deck noté">side</span><% } %><span class="pp-record">(<%= recordOf[String(m.p2.userId)] || '0-0-0' %>)</span> <%= m.p2.username %></span>
+                <span class="pp-name"><% if (sideOf(m.p2)) { %><span class="pp-side" title="Side deck noté">side</span><% } %><% if (m.firstPlayer === 'p2') { %><span class="pp-side pp-first" title="Commence la manche 1 (tirage au sort)">⚄ commence</span><% } %><span class="pp-record">(<%= recordOf[String(m.p2.userId)] || '0-0-0' %>)</span> <%= m.p2.username %></span>
                 <span class="pp-deck"><%= m.p2.deckName || 'deck non renseigné' %></span>
               </div>
             </a>

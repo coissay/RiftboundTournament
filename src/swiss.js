@@ -2,6 +2,8 @@
 // Points : victoire 3, nul 1, défaite 0. Le bye vaut une victoire (3 pts).
 // Tiebreakers façon locator : OMW%, GW%, OGW% (plancher 33 %, convention TCG).
 
+import { randomInt } from 'node:crypto';
+
 export const WIN_POINTS = 3;
 export const DRAW_POINTS = 1;
 
@@ -194,6 +196,7 @@ export function pairRound(tournament) {
     p1: { userId: a.userId, username: a.username, deckId: a.deckId, deckName: a.deckName, deckVersion: a.deckVersion || 1 },
     p2: { userId: b.userId, username: b.username, deckId: b.deckId, deckName: b.deckName, deckVersion: b.deckVersion || 1 },
     result: null,
+    firstPlayer: drawFirstPlayer(), // côté qui commence la manche 1 (tirage au sort)
   }));
   if (byePlayer) {
     result.push({
@@ -202,9 +205,16 @@ export function pairRound(tournament) {
       p1: { userId: byePlayer.userId, username: byePlayer.username, deckId: byePlayer.deckId, deckName: byePlayer.deckName, deckVersion: byePlayer.deckVersion || 1 },
       p2: null,
       result: 'p1',
+      firstPlayer: null,
     });
   }
   return result;
+}
+
+// Tirage au sort (50/50) du joueur qui commence la manche 1. Les manches suivantes
+// d'un Bo3 / Bo5 suivent la règle habituelle, on ne les modélise pas.
+export function drawFirstPlayer() {
+  return randomInt(2) === 0 ? 'p1' : 'p2';
 }
 
 function pairKey(a, b) {
