@@ -101,7 +101,7 @@ const myNextOpp = myNext && !myNext.bye ? (String(myNext.p1.userId) === me0 ? my
     <div class="versus-side <%= match.result === 'p1' && decided ? 'versus-winner' : '' %>">
       <span class="avatar"><%= initial(match.p1.username) %></span>
       <span class="versus-name"><%= match.p1.username %><%= mySide === 'p1' ? ' (moi)' : '' %></span>
-      <% if (fp === 'p1') { %><span class="tag tag-gold first-marker" title="Commence la manche 1">⚄ commence</span><% } %>
+      <% if (fp === 'p1') { %><span class="tag tag-gold first-marker" title="Commence la manche 1"><%- include('partials/icon', { name: 'dice' }) %> commence</span><% } %>
       <span class="muted">(<%= recordOf[String(match.p1.userId)] || '0-0-0' %>)</span>
       <span class="muted deck-tag"><%= match.p1.deckName || 'deck non renseigné' %></span>
     </div>
@@ -113,7 +113,7 @@ const myNextOpp = myNext && !myNext.bye ? (String(myNext.p1.userId) === me0 ? my
     <div class="versus-side <%= match.result === 'p2' && decided ? 'versus-winner' : '' %>">
       <span class="avatar"><%= initial(match.p2.username) %></span>
       <span class="versus-name"><%= match.p2.username %><%= mySide === 'p2' ? ' (moi)' : '' %></span>
-      <% if (fp === 'p2') { %><span class="tag tag-gold first-marker" title="Commence la manche 1">⚄ commence</span><% } %>
+      <% if (fp === 'p2') { %><span class="tag tag-gold first-marker" title="Commence la manche 1"><%- include('partials/icon', { name: 'dice' }) %> commence</span><% } %>
       <span class="muted">(<%= recordOf[String(match.p2.userId)] || '0-0-0' %>)</span>
       <span class="muted deck-tag"><%= match.p2.deckName || 'deck non renseigné' %></span>
     </div>
@@ -174,7 +174,7 @@ const myNextOpp = myNext && !myNext.bye ? (String(myNext.p1.userId) === me0 ? my
                 <% if (mine) { %><%- include('partials/siding-chips', { sd: mine, sdk: null, n: cur, cardImage, thumb, inline: true }) %>
                 <% } else { %><span class="muted">optionnel — aucun échange noté</span><% } %>
               </span>
-              <span class="badge <%= mine ? 'badge-live' : 'badge-done' %>"><%= mine ? 'noté' : 'à noter' %></span>
+              <span class="badge <%= mine ? 'badge-ok' : 'badge-open' %>"><%= mine ? 'noté' : 'à noter' %></span>
               <span class="muted siding-current-opp"><%= oppLine(oppS) %></span>
             </summary>
             <div class="siding-panel-body">

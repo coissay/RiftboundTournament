@@ -28,7 +28,8 @@
     for (const u of cfg.users) playerSelect.appendChild(option(u.id, u.username, u.id === userId));
   }
 
-  function fillDecks(deckSelect, userId, keepDeckId) {
+  // Remplit le select des decks du joueur ; `hint` (élément .form-hint) explique pourquoi il est désactivé.
+  function fillDecks(deckSelect, userId, keepDeckId, hint) {
     deckSelect.innerHTML = '';
     deckSelect.appendChild(option('', '— sans deck —'));
     const decks = (userId && cfg.decksByOwner[userId]) || [];
@@ -36,10 +37,9 @@
       deckSelect.appendChild(option(d.id, d.legend ? d.name + ' (' + d.legend + ')' : d.name, d.id === keepDeckId));
     }
     deckSelect.disabled = decks.length === 0;
-    if (!userId) {
-      deckSelect.firstChild.textContent = '— choisis d’abord le joueur —';
-    } else if (decks.length === 0) {
-      deckSelect.firstChild.textContent = '— ce joueur n’a aucun deck enregistré —';
+    if (hint) {
+      hint.textContent = !userId ? 'Choisis d’abord le joueur.' : decks.length === 0 ? 'Ce joueur n’a aucun deck enregistré : la place reste sans deck.' : '';
+      hint.hidden = !hint.textContent;
     }
   }
 
@@ -63,11 +63,14 @@
     const deckSelect = document.createElement('select');
     deckSelect.name = name.replace('slot', 'side').replace('_', '_deck');
     deckLabel.appendChild(deckSelect);
-    fillDecks(deckSelect, userId, saved.deckId);
+    const deckHint = document.createElement('span');
+    deckHint.className = 'form-hint muted fp-deck-hint';
+    deckLabel.appendChild(deckHint);
+    fillDecks(deckSelect, userId, saved.deckId, deckHint);
 
     playerSelect.addEventListener('change', function () {
       remembered[name] = { userId: playerSelect.value, deckId: '' };
-      fillDecks(deckSelect, playerSelect.value, '');
+      fillDecks(deckSelect, playerSelect.value, '', deckHint);
     });
     deckSelect.addEventListener('change', function () {
       remembered[name] = { userId: playerSelect.value, deckId: deckSelect.value };

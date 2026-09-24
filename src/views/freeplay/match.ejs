@@ -3,17 +3,17 @@
 <p><a href="/free-play" class="muted">← Free play</a></p>
 
 <div class="card match-card">
+  <h1 class="fp-match-title">Free play · <%= spec.label %> · Bo<%= match.bestOf || 1 %></h1>
   <p class="muted match-meta">
-    Free play <%= spec.label %> · Bo<%= match.bestOf || 1 %>
+    <span class="badge badge-<%= match.status === 'en_cours' ? 'live' : 'done' %>"><%= match.status === 'en_cours' ? '● En cours' : match.result === 'draw' ? 'Nul' : 'Terminé' %></span>
     · <%= match.date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) %>
     à <%= match.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) %>
     · créé par <%= match.creatorName %>
-    <% if (match.notes) { %><br><%= match.notes %><% } %>
   </p>
+  <% if (match.notes) { %><p class="muted match-notes"><%= match.notes %></p><% } %>
 
   <% const need = Math.ceil((match.bestOf || 1) / 2); %>
   <% const firstId = match.firstPlayer ? String(match.firstPlayer.userId) : null; %>
-  <% const firstName = firstId ? (match.sides.flatMap((s) => s.players).find((p) => String(p.userId) === firstId) || match.firstPlayer).username : null; %>
   <% const catchUp = me && match.status !== 'terminé' ? sidingGames.filter((n) => n <= games.played) : []; %>
   <% const players = match.sides.flatMap((s) => s.players); const myId = me ? String(me.userId) : null; const sidingAction = `/free-play/${match._id}/siding`; %>
   <% const sideLineOf = (p, n) => { const uid = String(p.userId); const sd = siding[uid].games[n]; return (uid === myId ? 'mon side' : p.username) + ' : ' + (sd ? (sidingVisible[uid] ? sideSummary(sd) : '🔒 side renseigné, visible à la clôture') : 'rien de noté'); }; %>
@@ -27,6 +27,40 @@
     </div>
   <% } %>
 
+  <% const missingDeck = players.filter((p) => !p.deckId && canSetDeckOf[String(p.userId)]); %>
+  <% if (missingDeck.length) { const onlyMe = missingDeck.length === 1 && String(missingDeck[0].userId) === currentUser.id; %>
+    <div class="callout callout-gold fp-deck-callout" id="fp-deck-callout" role="status">
+      <span class="callout-icon" aria-hidden="true">🃏</span>
+      <div class="fp-deck-callout-body">
+        <p class="fp-deck-callout-title">
+          <% if (onlyMe) { %><strong>Ton deck n'est pas renseigné pour ce match.</strong>
+          <% } else if (missingDeck.length === 1) { %><strong><%= missingDeck[0].username %> n'a pas de deck renseigné.</strong>
+          <% } else { %><strong>Decks non renseignés :</strong> <%= missingDeck.map((p) => (String(p.userId) === currentUser.id ? 'toi' : p.username)).join(', ') %>.<% } %>
+          <span class="muted">Sans deck, le match ne compte pas dans les stats par deck — tu peux le déclarer maintenant, même après la partie.</span>
+        </p>
+        <% for (const p of missingDeck) { const uid = String(p.userId); const isMe = uid === currentUser.id; const list = decksByPlayer[uid] || []; %>
+          <form method="post" action="/free-play/<%= match._id %>/deck" class="fp-deck-form fp-deck-callout-form">
+            <input type="hidden" name="userId" value="<%= uid %>">
+            <% if (!onlyMe) { %><span class="fp-deck-who"><%= isMe ? 'Mon deck' : p.username %></span><% } %>
+            <% if (list.length) { %>
+              <select name="deckId" required aria-label="Deck de <%= isMe ? 'moi' : p.username %>">
+                <option value="">— choisir un deck —</option>
+                <% for (const d of list) { %><option value="<%= d.id %>"><%= d.name %></option><% } %>
+              </select>
+              <button class="btn btn-gold"><%= isMe ? 'Déclarer mon deck' : 'Déclarer son deck' %></button>
+            <% } else if (isMe) { %>
+              <span class="muted">Tu n'as encore aucun deck enregistré.</span> <a href="/decks" class="btn btn-gold">Créer mon deck</a>
+            <% } else if (isGuest[uid]) { %>
+              <span class="muted"><%= p.username %> n'a aucun deck enregistré — il/elle pourra le déclarer une fois son compte créé.</span>
+            <% } else { %>
+              <span class="muted"><%= p.username %> n'a aucun deck enregistré.</span>
+            <% } %>
+          </form>
+        <% } %>
+      </div>
+    </div>
+  <% } %>
+
   <div class="versus versus-<%= spec.sides %>">
     <% match.sides.forEach((side, i) => { %>
       <% if (i > 0) { %>
@@ -35,24 +69,26 @@
             <div class="versus-score"><%= games.wins[0] %> — <%= games.wins[1] %></div>
             <% if (games.draws) { %><div class="muted"><%= games.draws %> manche<%= games.draws > 1 ? 's' : '' %> nulle<%= games.draws > 1 ? 's' : '' %></div><% } %>
           <% } %>
-          <div class="versus-vs">VS</div>
+          <div class="versus-vs"><%= match.status === 'terminé' ? 'FINAL' : tiebreak ? 'DÉPARTAGE' : games.played ? 'MANCHE ' + (games.played + 1) : 'VS' %></div>
         </div>
       <% } %>
-      <div class="versus-side <%= match.result === i && decided ? 'versus-winner' : '' %>">
+      <div class="versus-side <%= match.result === i && match.status === 'terminé' ? 'versus-winner' : '' %>">
         <% if (spec.perSide > 1) { %><span class="muted fp-team-label"><%= i === 0 ? 'Équipe A' : 'Équipe B' %></span><% } %>
         <% for (const p of side.players) { %>
           <div class="fp-player">
             <a class="versus-name" href="/players/<%= p.userId %>"><%= p.username %></a>
-            <% if (firstId === String(p.userId)) { %><span class="tag tag-gold fp-first" title="Premier joueur de la manche 1"><%- include('../partials/icon', { name: 'dice' }) %> commence</span><% } %>
-            <span class="muted">(<%= recordOf[String(p.userId)] || '0-0-0' %>)</span>
+            <% if (firstId === String(p.userId)) { %><span class="tag tag-gold fp-first <%= iStart ? 'fp-first-me' : '' %>" title="Premier joueur de la manche 1 (tiré au sort)<%= spec.perSide > 1 ? ' — son équipe commence' : '' %>"><%- include('../partials/icon', { name: 'dice' }) %> <%= iStart ? 'Tu commences' : 'commence' %></span><% } %>
+            <span class="muted" title="Bilan V-N-D en free play <%= spec.label %>">(<%= recordOf[String(p.userId)] || '0-0-0' %>)</span>
             <% if (p.deckName) { %>
               <span class="muted deck-tag"><% if (p.deckId && currentUser) { %><a href="/decks/<%= p.deckId %>"><%= p.deckName %></a><% } else { %><%= p.deckName %><% } %><%= p.deckVersion ? ' v' + p.deckVersion : '' %></span>
             <% } else { %>
-              <span class="muted deck-tag"><em>sans deck</em></span>
+              <span class="muted deck-tag"><em>deck non renseigné</em></span>
             <% } %>
-            <% if (canSetDeckOf[String(p.userId)]) { const myDecks = decksByPlayer[String(p.userId)] || []; %>
+            <% if (canSetDeckOf[String(p.userId)] && !p.deckId) { %>
+              <a href="#fp-deck-callout" class="btn btn-gold btn-small fp-deck-declare">🃏 Déclarer <%= String(p.userId) === currentUser.id ? 'mon' : 'son' %> deck</a>
+            <% } else if (canSetDeckOf[String(p.userId)]) { const myDecks = decksByPlayer[String(p.userId)] || []; %>
               <details class="fp-deck-edit">
-                <summary class="muted">✎ <%= p.deckName ? 'modifier le deck' : 'déclarer le deck' %></summary>
+                <summary class="btn btn-ghost btn-small">✎ Modifier</summary>
                 <% if (myDecks.length) { %>
                   <form method="post" action="/free-play/<%= match._id %>/deck" class="fp-deck-form">
                     <input type="hidden" name="userId" value="<%= p.userId %>">
@@ -75,14 +111,6 @@
     <% }) %>
   </div>
 
-  <% if (match.firstPlayer) { %>
-    <p class="fp-first-line <%= iStart ? 'fp-first-me' : 'muted' %>">
-      <%- include('../partials/icon', { name: 'dice' }) %>
-      Premier joueur (manche 1) : <strong><%= firstName %></strong><%= spec.perSide > 1 ? ' — son équipe commence' : '' %><% if (iStart) { %> · <strong>Tu commences</strong><% } %>
-      <span class="muted">(tiré au sort)</span>
-    </p>
-  <% } %>
-
   <% if (spec.sides > 2 && games.draws) { %><p class="muted match-meta"><%= games.draws %> manche<%= games.draws > 1 ? 's' : '' %> nulle<%= games.draws > 1 ? 's' : '' %></p><% } %>
 
   <% if (games.played > 0) { %>
@@ -94,7 +122,7 @@
           <% } else { %><span class="result-chip win">Victoire <%= sideName(match.sides[r]) %></span><% } %>
         </div>
         <% const anySide = players.some((p) => siding[String(p.userId)].games[n]); %>
-        <% if (me || anySide) { %>
+        <% if (anySide) { %>
         <div class="manche-side">
           <% if (!sidingGames.includes(n)) { %><span class="muted">decks inscrits pour tout le monde</span>
           <% } else { for (const p of players) { const uid = String(p.userId); const sd = siding[uid].games[n]; %>
@@ -113,17 +141,21 @@
   <% if (canReport && !decided) { %>
     <div class="manche-report">
       <p class="manche-title">Manche <%= games.played + 1 %><%= tiebreak ? ' (départage)' : '' %> — qui l'emporte ?</p>
-      <div class="report-buttons report-buttons-<%= spec.sides %>">
-        <% match.sides.forEach((side, i) => { %>
-          <form method="post" action="/free-play/<%= match._id %>/games">
-            <input type="hidden" name="gameResult" value="<%= i %>">
-            <button class="btn btn-report <%= i === 0 ? 'btn-win-left' : i === match.sides.length - 1 ? 'btn-win-right' : 'btn-win-mid' %>"><%= sideName(side) %><span>Victoire</span></button>
-          </form>
-        <% }) %>
+      <% const drawForm = () => { %>
         <form method="post" action="/free-play/<%= match._id %>/games">
           <input type="hidden" name="gameResult" value="draw">
-          <button class="btn btn-report btn-draw-mid">Nul<span>Égalité</span></button>
+          <button class="btn btn-report btn-draw-mid"><span class="who">Nul</span><span class="sub">égalité / temps</span></button>
         </form>
+      <% }; %>
+      <div class="report-buttons<%= spec.sides > 2 ? ' report-buttons-' + spec.sides : '' %>">
+        <% match.sides.forEach((side, i) => { %>
+          <% if (spec.sides === 2 && i === 1) drawForm(); %>
+          <form method="post" action="/free-play/<%= match._id %>/games">
+            <input type="hidden" name="gameResult" value="<%= i %>">
+            <button class="btn btn-report <%= i === 0 ? 'btn-win-left' : i === match.sides.length - 1 ? 'btn-win-right' : 'btn-win-mid' %>"><span class="who"><%= sideName(side) %></span><span class="sub">gagne la manche</span></button>
+          </form>
+        <% }) %>
+        <% if (spec.sides > 2) drawForm(); %>
       </div>
       <p class="muted">Première à <%= need %> manche<%= need > 1 ? 's' : '' %> gagnée<%= need > 1 ? 's' : '' %>.<%= spec.sides > 2 ? ' En cas d’égalité en tête au bout du Bo, une manche de départage est jouée.' : '' %> Le match se clôture tout seul une fois décidé ; sinon, « Clôturer au score » enregistre le score en l'état.</p>
 
@@ -137,7 +169,7 @@
                 <% if (mine) { %><%- include('../partials/siding-chips', { sd: mine, sdk: null, n: cur, cardImage, thumb, inline: true }) %>
                 <% } else { %><span class="muted">optionnel — aucun échange noté</span><% } %>
               </span>
-              <span class="badge <%= mine ? 'badge-live' : 'badge-done' %>"><%= mine ? 'noté' : 'à noter' %></span>
+              <span class="badge <%= mine ? 'badge-ok' : 'badge-open' %>"><%= mine ? 'noté' : 'à noter' %></span>
               <span class="muted siding-current-opp"><%= others.map((p) => sideLineOf(p, cur)).join(' · ') %></span>
             </summary>
             <div class="siding-panel-body">
@@ -189,7 +221,7 @@
       <% } %>
       <% if (canReport && games.played > 0) { %>
         <form method="post" action="/free-play/<%= match._id %>/reset" class="inline" data-confirm="Effacer toutes les manches saisies pour ce match ?">
-          <button class="btn btn-ghost btn-small">↺ Réinitialiser la saisie</button>
+          <button class="btn btn-danger-text btn-small">↺ Réinitialiser la saisie</button>
         </form>
       <% } %>
       <% if (match.status === 'terminé' && (owner || match.sides.some(s => s.players.some(p => String(p.userId) === currentUser.id)))) { %>
@@ -199,7 +231,7 @@
       <% } %>
       <% if (owner) { %>
         <form method="post" action="/free-play/<%= match._id %>/delete" class="inline" data-confirm="Le match et ses manches seront supprimés définitivement." data-confirm-title="Supprimer ce match ?">
-          <button class="btn btn-danger btn-small">Supprimer</button>
+          <button class="btn btn-danger-text btn-small">Supprimer le match</button>
         </form>
       <% } %>
     </div>

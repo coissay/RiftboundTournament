@@ -143,7 +143,7 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .event-side { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
 .winner-line { color: var(--gold); }
 
-.badge { padding: 0.25rem 0.7rem; border-radius: 999px; font-size: 0.8rem; white-space: nowrap; }
+.badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.7rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
 .badge-open { background: rgba(212, 169, 65, 0.15); color: var(--gold); border: 1px solid var(--gold-dark); }
 .badge-live { background: rgba(74, 222, 128, 0.12); color: var(--live); border: 1px solid rgba(74, 222, 128, 0.5); }
 .badge-done { background: var(--bg-card-2); color: var(--muted); border: 1px solid var(--border); }
@@ -297,7 +297,6 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .pairing-cell { color: var(--text); display: block; }
 .pairing-cell:hover { text-decoration: none; }
 .pairing-cell:hover strong { color: var(--gold); }
-.match-link { font-size: 0.85rem; white-space: nowrap; }
 
 @media (max-width: 560px) {
   .versus { flex-direction: column; }
@@ -324,7 +323,7 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .rate-bar { width: 90px; height: 6px; background: var(--bg); border-radius: 3px; display: inline-block; margin-right: 0.5rem; vertical-align: middle; }
 .rate-fill { height: 100%; background: linear-gradient(90deg, var(--gold-dark), var(--gold)); border-radius: 3px; }
 
-.empty { text-align: center; color: var(--muted); padding: 2.5rem 1rem; border: 1px dashed var(--border); border-radius: 12px; }
+.empty { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; text-align: center; color: var(--muted); padding: 2.2rem 1rem; border: 1px dashed var(--border); border-radius: 12px; }
 
 @media (max-width: 640px) {
   .event-card { flex-direction: column; align-items: flex-start; }
@@ -531,25 +530,22 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .siding-panel-title { font-weight: 700; }
 .siding-panel-summary { flex: 1 1 200px; }
 .siding-panel-body { padding: 0.8rem 0.9rem; }
-.siding-sep { border: 0; border-top: 1px dashed var(--border); margin: 0.8rem 0; }
 .manche-side { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem 1.2rem; margin: -0.1rem 0 0.5rem; font-size: 0.9rem; }
 .manche-side-player { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 .siding-inline-chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
 .siding-inline-chips .sided-deck { margin: 0; display: inline-block; }
 .manche-side-current { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.8rem; margin: 0 0 0.8rem; flex-direction: column; align-items: center; }
-.manche-side-opp { font-size: 0.85rem; }
-.siding-current { margin: 0 0 0.9rem; text-align: left; }
+.siding-current { margin: 1rem 0 0.9rem; border-style: dashed; text-align: left; }
 .siding-current summary { padding: 0.55rem 0.9rem; }
+.siding-current summary .siding-panel-title { font-size: 0.95rem; }
 .siding-current .siding-panel-summary { flex: 1 1 240px; }
 .siding-current-opp { flex: 1 1 100%; padding-left: 1.7em; font-size: 0.85rem; }
 .siding-current .siding-inline-chips .siding-note-inline { display: inline; }
 .siding-form-after { margin-top: 0.8rem; text-align: left; }
 .siding-form-after summary { list-style: none; cursor: pointer; display: inline-block; }
 
-.siding-form-current summary { list-style: none; cursor: pointer; display: inline-block; }
-.siding-form-current summary::-webkit-details-marker { display: none; }
 .siding-form-body { margin-top: 0.6rem; }
-.sided-deck summary::marker, .siding-form summary::marker, .siding-form-current summary::marker, .siding-panel summary::marker, .guest-add summary::marker { content: ''; }
+.sided-deck summary::marker, .siding-form summary::marker, .siding-panel summary::marker, .guest-add summary::marker { content: ''; }
 
 /* ---- Boîte de confirmation (confirm.js) ---- */
 .confirm-dialog { border: 0; padding: 0; background: transparent; max-width: min(92vw, 460px); width: 100%; }
@@ -596,9 +592,9 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .btn-danger-text { background: none; border: 0; color: var(--danger); padding: 0.25rem 0.4rem; min-height: 32px; font-size: 0.88rem; }
 @media (pointer: coarse) { .btn, .tabs a, .chip { min-height: 44px; } .btn-small { min-height: 40px; } }
 
-.badge { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; letter-spacing: 0.01em; }
 .badge-live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.25); animation: pulse 1.6s infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(74, 222, 128, 0.08); } }
+.badge-ok { background: rgba(74, 222, 128, 0.12); color: var(--live); border: 1px solid rgba(74, 222, 128, 0.5); }
 .badge-info { background: var(--info-soft); color: var(--info); border: 1px solid rgba(124, 180, 255, 0.4); }
 
 .flash { display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.8rem 1rem; border-left-width: 4px; box-shadow: var(--shadow); animation: flash-in 0.25s ease-out; }
@@ -609,7 +605,6 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .flash-error { border-left-color: var(--danger); }
 @keyframes flash-in { from { opacity: 0; transform: translateY(-6px); } }
 
-.empty { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; padding: 2.2rem 1rem; }
 .empty-icon { font-size: 2.2rem; line-height: 1; opacity: 0.8; }
 .empty strong { color: var(--text); font-size: 1.05rem; }
 .empty p { margin: 0; max-width: 34rem; }
@@ -846,11 +841,9 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .match-timer-pill .timer { font-size: 1.1rem; }
 .versus-side .avatar { margin-bottom: 0.3rem; }
 .report-buttons .btn-report { padding: 1rem 0.6rem; border-width: 2px; }
-.btn-report .who { font-size: 1.15rem; }
+.btn-report .who { font-size: 1.15rem; font-weight: 700; opacity: 1; }
 .btn-report .sub { font-size: 0.75rem; opacity: 0.85; font-weight: 500; }
 .btn-win-left:hover, .btn-win-right:hover, .btn-win-mid:hover { background: rgba(74, 222, 128, 0.22); filter: none; }
-.siding-current { margin-top: 1rem; border-style: dashed; }
-.siding-current summary .siding-panel-title { font-size: 0.95rem; }
 .report-hint { text-align: center; font-size: 0.85rem; }
 @media (max-width: 560px) { .match-timer-pill { width: 100%; justify-content: space-between; } }
 
@@ -865,7 +858,6 @@ fieldset legend { color: var(--muted); padding: 0 0.4rem; }
 .error-code { font-size: 5rem; font-weight: 900; line-height: 1; background: linear-gradient(180deg, var(--gold), var(--gold-dark)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .error-page h1 { margin: 0.4rem 0; }
 .error-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.2rem; }
-.btn-report .who { font-weight: 700; opacity: 1; }
 .pp-record { white-space: nowrap; }
 .deck-page .deck-detail-view .deck-view-head { display: none; }
 @media (max-width: 640px) {
@@ -985,9 +977,13 @@ body.table-mode .first-player { font-size: 1.2rem; }
 
 /* ---- Free play : premier joueur tiré au sort, départage en pod, joueur sans compte ---- */
 .fp-first { font-size: 0.72rem; margin-top: -0.1rem; }
-.fp-first-line { display: flex; align-items: center; justify-content: center; gap: 0.4rem; flex-wrap: wrap; margin: 0.6rem 0 0.9rem; font-size: 0.92rem; }
-.fp-first-line .icon { color: var(--gold); }
-.fp-first-me { color: var(--gold); }
+.fp-first.fp-first-me { font-weight: 700; }
+.fp-match-title { font-size: 1.15rem; margin: 0 0 0.3rem; }
+.fp-match-title + .match-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem; }
+.match-notes { text-align: center; margin: -0.6rem 0 1rem; font-style: italic; }
+@media (max-width: 560px) { .versus-3 .versus-center { display: none; } }
+.fp-slots-label { font-weight: 600; margin: 0.2rem 0 0.5rem; }
+.fp-deck-hint { display: block; margin: 0.2rem 0 0; }
 .fp-tiebreak { justify-content: center; text-align: center; }
 .fp-guest-add { margin: -0.3rem 0 1rem; }
 .fp-guest-add > .muted { margin: 0.5rem 0 0; }
@@ -1000,3 +996,19 @@ body.table-mode .first-player { font-size: 1.2rem; }
 .fp-deck-edit summary::marker { content: ''; }
 .fp-deck-form { display: flex; gap: 0.4rem; align-items: center; justify-content: center; flex-wrap: wrap; margin: 0.4rem 0 0.2rem; }
 .fp-deck-form select { margin: 0; padding: 0.3rem 0.5rem; max-width: 220px; }
+.fp-deck-callout { align-items: flex-start; }
+.fp-deck-callout-body { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+.fp-deck-callout-title { margin: 0; }
+.fp-deck-callout-title .muted { display: block; margin-top: 0.15rem; }
+.fp-deck-callout-form { justify-content: flex-start; margin: 0; }
+.fp-deck-callout-form select { max-width: 280px; }
+.fp-deck-who { font-weight: 600; min-width: 6rem; }
+.fp-deck-declare { margin-top: 0.3rem; }
+.fp-tag-nodeck { color: #fbbf24; border-color: rgba(251, 191, 36, 0.5); background: rgba(251, 191, 36, 0.1); }
+
+/* ---- Vue deck : impression alternative (art alternatif, showcase, réimpression) choisie dans la decklist ---- */
+.card-thumb .print-badge {
+  position: absolute; left: 4px; top: 4px;
+  background: rgba(10, 17, 32, 0.9); color: var(--gold); border: 1px solid var(--gold-dark);
+  border-radius: 6px; padding: 0 0.3rem; font-size: 0.7rem; line-height: 1.4;
+}

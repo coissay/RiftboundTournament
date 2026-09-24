@@ -22,7 +22,7 @@ const deckTag = (p) => (p.deckName || 'deck non renseigné') + (p.deckName && p.
     <% const mine = me ? mySiding.games[n] || null : null; %>
     <details class="siding-panel" id="siding-game-<%= n %>" <%= sidable && hasSide(n) ? 'open' : '' %>>
       <summary>
-        <span class="siding-panel-title"><%= sidable ? 'Manche ' + n + (n > (match.bestOf || 1) ? ' (départage)' : '') : 'Decks de base' %></span>
+        <span class="siding-panel-title"><%= sidable ? 'Manche ' + n + (n > (match.bestOf || 1) ? ' (départage)' : '') : 'Manche ' + n + ' · decks de base' %></span>
         <span class="badge <%= done ? 'badge-done' : 'badge-open' %>"><%= done ? '✓ ' + labelOf(n) : 'non jouée' %></span>
         <span class="muted siding-panel-summary">
           <% if (!sidable) { %>manche <%= n %> jouée avec les decks inscrits — les sides suivants s'expriment par rapport à eux

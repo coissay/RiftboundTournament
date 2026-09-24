@@ -49,8 +49,10 @@
         <% if (m.notes) { %> · <%= m.notes %><% } %>
       </p>
     </div>
+    <% const mineNoDeck = currentUser && m.sides.some((s) => s.players.some((p) => String(p.userId) === currentUser.id && !p.deckId)); %>
     <div class="event-side">
       <span class="badge badge-<%= m.status === 'en_cours' ? 'live' : 'done' %>"><%= m.status === 'en_cours' ? '● En cours' : m.result === 'draw' ? 'Nul' : 'Terminé' %></span>
+      <% if (mineNoDeck) { %><span class="tag fp-tag-nodeck" title="Tu as joué ce match sans indiquer ton deck : clique pour le déclarer">⚠ deck non renseigné</span><% } %>
       <span class="muted"><%= g.played %> manche<%= g.played > 1 ? 's' : '' %></span>
     </div>
   </a>

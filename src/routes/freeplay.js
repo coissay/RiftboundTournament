@@ -258,6 +258,9 @@ router.get('/free-play/:id', async (req, res, next) => {
     const decksByPlayer = {};
     for (const d of deckDocs) (decksByPlayer[String(d.ownerId)] ||= []).push({ id: String(d._id), name: d.name });
     const canSetDeckOf = Object.fromEntries(players.map((p) => [String(p.userId), editable.includes(p.userId)]));
+    // Invités (sans compte) parmi les joueurs : le wording du callout deck en dépend.
+    const guestDocs = editable.length ? await req.db.collection('users').find({ _id: { $in: editable }, guest: true }, { projection: { _id: 1 } }).toArray() : [];
+    const isGuest = Object.fromEntries(guestDocs.map((u) => [String(u._id), true]));
 
     res.render('freeplay/match', {
       match,
@@ -285,6 +288,7 @@ router.get('/free-play/:id', async (req, res, next) => {
       // deck joué
       decksByPlayer,
       canSetDeckOf,
+      isGuest,
     });
   } catch (err) {
     next(err);

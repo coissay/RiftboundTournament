@@ -12,8 +12,9 @@
         <% } %>
       </select>
     </label>
-    <p class="form-hint muted" id="fp-format-note" hidden></p>
-    <label>Format des manches
+    <% const initialNote = FORMATS[values.format] && FORMATS[values.format].note; %>
+    <p class="form-hint muted" id="fp-format-note" <%= initialNote ? '' : 'hidden' %>><%= initialNote || '' %></p>
+    <label>Manches (Best of)
       <select name="bestOf">
         <option value="1" <%= values.bestOf == 1 ? 'selected' : '' %>>Best of 1 (une manche sèche)</option>
         <option value="3" <%= values.bestOf == 3 ? 'selected' : '' %>>Best of 3 (2 manches gagnantes)</option>
@@ -23,6 +24,7 @@
     <label>Date et heure <input type="datetime-local" name="date"></label>
     <p class="form-hint muted">Préremplie à maintenant — modifie-la pour saisir un match joué plus tôt.</p>
 
+    <p class="fp-slots-label">Joueurs</p>
     <div id="fp-slots"></div>
     <p class="form-hint muted">Le deck est facultatif, mais sans deck le match ne compte pas dans les stats par deck.</p>
 
