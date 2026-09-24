@@ -8,6 +8,7 @@ import { initCatalog } from './cards.js';
 import { isAdmin } from './middleware.js';
 import { startHousekeeping } from './housekeeping.js';
 import { migrateDecks } from './deckversions.js';
+import { bareName } from './siding.js';
 import authRoutes from './routes/auth.js';
 import deckRoutes from './routes/decks.js';
 import deckbuilderRoutes from './routes/deckbuilder.js';
@@ -30,6 +31,8 @@ app.set('views', path.join(__dirname, 'views'));
 // JSON à insérer dans un <script> inline : JSON.stringify n'échappe ni « < » (fermeture de
 // balise → XSS stocké via un pseudo) ni U+2028/U+2029 (fin de ligne JS). À utiliser avec <%- %>.
 app.locals.jsonForScript = (x) => JSON.stringify(x).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+// Nom catalogue nu d'une ligne de side (sans code d'impression), pour les pastilles −N / +N (partials/siding-chips).
+app.locals.bareName = bareName;
 app.use(express.urlencoded({ extended: true, limit: '200kb' }));
 app.use(express.json({ limit: '200kb' }));
 app.use(express.static(path.join(__dirname, 'public')));

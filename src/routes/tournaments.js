@@ -5,6 +5,7 @@ import { AUTO_CLOSE_DAYS } from '../housekeeping.js';
 import { computeStandings, drawFirstPlayer, pairRound, suggestedRounds, winsNeeded } from '../swiss.js';
 import { currentVersion, playedVersion, ensureVersioned } from '../deckversions.js';
 import { resolveDecklist, parseDecklist, cardImageByName, applySiding, thumb } from '../cards.js';
+import { deckLinesFor, sidedDeckFor, sideSummary } from '../siding.js';
 import { normalizeEmail, isEmail, findOrCreateGuest, newInviteToken, versionAtDate, setPlayedDeck } from '../guests.js';
 import { sendMail, inviteMail, absoluteUrl, mailConfigured } from '../mailer.js';
 
@@ -401,35 +402,7 @@ function sidingVisible(tournament, ownerId, viewer) {
   return !!viewer && String(ownerId) === viewer.id;
 }
 
-// Deck principal + réserve du joueur, dans la version jouée (pour le formulaire de side deck).
-async function deckLinesFor(db, player) {
-  // Dans les appariements, deckId est une chaîne (copié depuis le classement) : on le reconvertit.
-  const deckId = oid(player.deckId);
-  if (!deckId) return null;
-  let version = await db.collection('deck_versions').findOne({ deckId, version: playedVersion(player) });
-  if (!version) {
-    const deck = await db.collection('decks').findOne({ _id: deckId });
-    if (!deck) return null;
-    await ensureVersioned(db, deck);
-    version = { cards: deck.cards };
-  }
-  const resolved = resolveDecklist(version.cards || '');
-  const lines = (key) => (resolved.sections.find((s) => s.key === key)?.cards || []).map((l) => ({ name: l.card ? l.card.name : l.name, qty: l.qty, image: l.card?.image || null }));
-  return { main: lines('main'), sideboard: lines('sideboard'), text: version.cards || '' };
-}
-
-// Deck d'un joueur tel qu'il est après son side : cartes entrées dans le principal,
-// sorties en réserve, avec les changements marqués pour la vue deck.
-async function sidedDeckFor(db, player, sd) {
-  const lines = await deckLinesFor(db, player);
-  if (!lines) return null;
-  const resolved = resolveDecklist(applySiding(lines.text, sd));
-  const highlight = {};
-  for (const c of sd.in || []) highlight[c.name.toLowerCase()] = 'in';
-  for (const c of sd.out || []) highlight[c.name.toLowerCase()] = 'out';
-  const count = (key) => resolved.sections.find((s) => s.key === key)?.count || 0;
-  return { resolved, highlight, mainCount: count('main'), sideCount: count('sideboard') };
-}
+// deckLinesFor / sidedDeckFor / sideSummary : helpers partagés avec le free play, voir ../siding.js.
 
 router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res, next) => {
   try {
@@ -508,7 +481,7 @@ router.get('/tournaments/:id/rounds/:roundNumber/tables/:table', async (req, res
       currentGame: bestOf < 2 ? 1 : Math.min(Math.max(played + 1, 2), bestOf),
       cardImage: cardImageByName,
       liveSig: liveSignature(tournament),
-      sideSummary: (sd) => [...sd.out.map((c) => `−${c.qty} ${c.name}`), ...sd.in.map((c) => `+${c.qty} ${c.name}`)].join(', ') || 'aucun échange',
+      sideSummary,
     });
   } catch (err) {
     next(err);

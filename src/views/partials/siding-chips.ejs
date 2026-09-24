@@ -1,22 +1,24 @@
 <%
 /* Résumé d'un side (pastilles sorties / entrées, note, deck joué).
-   Attend : sd (side), sdk (deck après side ou null), n (manche), cardImage, thumb, inline (bool, optionnel : une seule ligne). */
+   Attend : sd (side), sdk (deck après side ou null), n (manche), cardImage, thumb, inline (bool, optionnel : une seule ligne).
+   Les pastilles affichent le nom catalogue nu (bareName, app.locals) — « Fiora, Peerless » et non « Fiora, Peerless (SFD-110a) » —
+   comme sideSummary ; le survol garde l'image de l'impression écrite. */
 const isInline = typeof inline !== 'undefined' && inline;
 %>
 <% if (isInline) { %>
   <span class="siding-inline-chips">
-    <% for (const c of sd.out) { %><span class="diff-chip diff-del">−<%= c.qty %> <%- include('card-name', { name: c.name, cardImage }) %></span><% } %>
-    <% for (const c of sd.in) { %><span class="diff-chip diff-add">+<%= c.qty %> <%- include('card-name', { name: c.name, cardImage }) %></span><% } %>
+    <% for (const c of sd.out) { %><span class="diff-chip diff-del">−<%= c.qty %> <%- include('card-name', { name: c.name, label: bareName(c.name), cardImage }) %></span><% } %>
+    <% for (const c of sd.in) { %><span class="diff-chip diff-add">+<%= c.qty %> <%- include('card-name', { name: c.name, label: bareName(c.name), cardImage }) %></span><% } %>
     <% if (!sd.out.length && !sd.in.length) { %><span class="muted">aucun échange</span><% } %>
     <% if (sd.note) { %><span class="muted siding-note-inline">« <%= sd.note %> »</span><% } %>
   </span>
 <% } else { %>
   <div class="siding-lists">
     <div><span class="muted">Sorties</span><% if (sd.out.length === 0) { %> <span class="muted">—</span><% } %>
-      <ul class="siding-list"><% for (const c of sd.out) { %><li><span class="diff-chip diff-del">−<%= c.qty %> <%- include('card-name', { name: c.name, cardImage }) %></span></li><% } %></ul>
+      <ul class="siding-list"><% for (const c of sd.out) { %><li><span class="diff-chip diff-del">−<%= c.qty %> <%- include('card-name', { name: c.name, label: bareName(c.name), cardImage }) %></span></li><% } %></ul>
     </div>
     <div><span class="muted">Entrées</span><% if (sd.in.length === 0) { %> <span class="muted">—</span><% } %>
-      <ul class="siding-list"><% for (const c of sd.in) { %><li><span class="diff-chip diff-add">+<%= c.qty %> <%- include('card-name', { name: c.name, cardImage }) %></span></li><% } %></ul>
+      <ul class="siding-list"><% for (const c of sd.in) { %><li><span class="diff-chip diff-add">+<%= c.qty %> <%- include('card-name', { name: c.name, label: bareName(c.name), cardImage }) %></span></li><% } %></ul>
     </div>
   </div>
   <% if (sd.note) { %><p class="siding-note"><%= sd.note %></p><% } %>

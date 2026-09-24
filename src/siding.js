@@ -2,12 +2,16 @@
 // matchs de tournoi et le free play. Stockage commun : siding[userId].games[n] =
 // { out, in, note, updatedAt }, chaque side exprimé par rapport au deck inscrit.
 //
-// NB : routes/tournaments.js garde encore ses propres copies de ces helpers (à
-// rebrancher sur ce module lors d'un prochain passage) ; les deux implémentations
-// doivent rester équivalentes.
+// routes/tournaments.js et routes/freeplay.js partagent ces helpers (deckLinesFor,
+// sidedDeckFor, sideSummary).
 import { oid } from './db.js';
 import { playedVersion, ensureVersioned } from './deckversions.js';
-import { resolveDecklist, parseDecklist, applySiding } from './cards.js';
+import { resolveDecklist, parseDecklist, applySiding, findCard } from './cards.js';
+
+/** Nom catalogue nu d'une ligne de side (« Fiora, Peerless (SFD-110a) » → « Fiora, Peerless »), sinon le nom écrit. */
+export function bareName(name) {
+  return findCard(name)?.name || name;
+}
 
 export function normalizeSiding(raw) {
   if (!raw) return { games: {} };
@@ -34,7 +38,19 @@ export async function deckLinesFor(db, player) {
     version = { cards: deck.cards };
   }
   const resolved = resolveDecklist(version.cards || '');
-  const lines = (key) => (resolved.sections.find((s) => s.key === key)?.cards || []).map((l) => ({ name: l.card ? l.card.name : l.name, qty: l.qty, image: l.card?.image || null }));
+  // Une ligne par carte (nom catalogue nu) : plusieurs impressions de la même carte (« 2 Akali, Deadly Weapon
+  // (VEN-021a) » + « 1 Akali, Deadly Weapon ») sont fusionnées (quantités additionnées, image de la première),
+  // sinon le formulaire de side afficherait deux lignes indistinguables et les quantités saisies se percuteraient.
+  const lines = (key) => {
+    const out = [];
+    for (const l of resolved.sections.find((s) => s.key === key)?.cards || []) {
+      const name = l.card ? l.card.name : l.name;
+      const hit = out.find((o) => o.name === name);
+      if (hit) hit.qty += l.qty;
+      else out.push({ name, qty: l.qty, image: l.card?.image || null });
+    }
+    return out;
+  };
   return { main: lines('main'), sideboard: lines('sideboard'), text: version.cards || '' };
 }
 
@@ -46,9 +62,11 @@ export async function sidedDeckFor(db, player, sd) {
   const lines = await deckLinesFor(db, player);
   if (!lines) return null;
   const resolved = resolveDecklist(applySiding(lines.text, sd));
+  // Clés = nom catalogue nu (deck-view compare sur card.name / baseName) : un side saisi en mode texte avec un
+  // code (« 2 Fiora, Peerless (SFD-110a) ») garde son badge IN / OUT.
   const highlight = {};
-  for (const c of sd.in || []) highlight[c.name.toLowerCase()] = 'in';
-  for (const c of sd.out || []) highlight[c.name.toLowerCase()] = 'out';
+  for (const c of sd.in || []) highlight[bareName(c.name).toLowerCase()] = 'in';
+  for (const c of sd.out || []) highlight[bareName(c.name).toLowerCase()] = 'out';
   return { resolved, highlight, mainCount: countOf(resolved, 'main'), sideCount: countOf(resolved, 'sideboard') };
 }
 
@@ -95,7 +113,7 @@ export function isEmptySiding(sd) {
   return !sd || (sd.out.length === 0 && sd.in.length === 0 && !sd.note);
 }
 
-// Résumé texte d'un side : « −2 Carte A, +2 Carte B » ou « aucun échange ».
+// Résumé texte d'un side : « −2 Carte A, +2 Carte B » ou « aucun échange » (noms catalogue nus, sans code).
 export function sideSummary(sd) {
-  return [...(sd.out || []).map((c) => `−${c.qty} ${c.name}`), ...(sd.in || []).map((c) => `+${c.qty} ${c.name}`)].join(', ') || 'aucun échange';
+  return [...(sd.out || []).map((c) => `−${c.qty} ${bareName(c.name)}`), ...(sd.in || []).map((c) => `+${c.qty} ${bareName(c.name)}`)].join(', ') || 'aucun échange';
 }
