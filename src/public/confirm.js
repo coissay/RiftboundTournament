@@ -4,7 +4,7 @@
 //   - le texte du bouton OK vaut, par défaut, celui du bouton de soumission cliqué ;
 //   - le style « danger » (rouge) est repris si ce bouton porte .btn-danger ou si data-confirm-danger est présent ;
 //   - un <button data-confirm="…"> hors formulaire déclenche aussi la boîte (l'événement click est stoppé si annulé).
-// Usage JS : window.appConfirm(message, { title, ok, danger }) → Promise<boolean>.
+// Usage JS : window.appConfirm(message, { title, ok, cancel, danger, icon }) → Promise<boolean>.
 (function () {
   'use strict';
 
@@ -59,6 +59,7 @@
     els.title.textContent = opts.title || 'Confirmer';
     els.message.textContent = message || '';
     els.ok.textContent = opts.ok || 'Confirmer';
+    els.cancel.textContent = opts.cancel || 'Annuler';
     els.ok.className = 'btn ' + (opts.danger ? 'btn-danger-solid' : 'btn-gold');
     els.icon.textContent = opts.icon || (opts.danger ? '⚠️' : '❔');
     dialog.showModal();

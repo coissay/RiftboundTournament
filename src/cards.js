@@ -11,7 +11,8 @@ const LOCALE = process.env.CARDS_LOCALE || 'en_US';
 const REFRESH_MS = 24 * 3600 * 1000;
 // À incrémenter quand la forme des cartes/méta stockées change : force un rechargement depuis l'API.
 // v3 : `name` = nom complet imprimé (« Fiora, Peerless »), + `baseName` / `subtitle`.
-const CATALOG_VERSION = 3;
+// v4 : + `illustrator` (affiché dans le sélecteur de versions du deckbuilder).
+const CATALOG_VERSION = 4;
 
 export const SECTIONS = [
   { key: 'legend', label: 'Légende', headers: ['legend', 'legende', 'légende'] },
@@ -27,6 +28,7 @@ const state = {
   meta: { domains: [], types: [], rarities: [], sets: [] },
   byName: new Map(),
   byBaseName: new Map(), // nom nu (« fiora ») -> cartes « Fiora, … », repli ambigu (voir lookup)
+  byCode: new Map(), // code de collection court (« sfd-110a », voir codeKey) -> impression exacte
   fetchedAt: null,
   source: null,
   error: null,
@@ -58,6 +60,28 @@ function fullName(c, types) {
   return subtitle && types[0] === 'unit' ? `${c.name}, ${subtitle}` : c.name;
 }
 
+/**
+ * Clé d'un code de collection, tolérante à la casse et au « /taille du set » :
+ * « SFD-110a/221 », « SFD-110a », « sfd-110a » -> « sfd-110a » ; « VEN-189*\/166 » -> « ven-189* ».
+ */
+export function codeKey(code) {
+  return String(code || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/\/\d+$/, '');
+}
+
+/** Code de collection court d'une impression, tel qu'on l'écrit dans une decklist : « SFD-110a », « VEN-R04 ». */
+export function shortCode(card) {
+  return String(card?.publicCode || '').replace(/\/\d+$/, '');
+}
+
+// « Nom (CODE) » en fin de ligne (appliqué à une chaîne déjà trimEnd, sans `\s*` final : pas de retour arrière
+// quadratique sur de longs blancs) : CODE = code de collection (« SFD-110a », « OGN-126/298 », « VEN-R04 »,
+// « VEN-SP3 », « VEN-189* »). Le préfixe lettres du numéro (R, T, SP) va jusqu'à 2 caractères.
+const TRAILING_CODE_RE = /^(.*)\(([A-Za-z]{2,4}-[A-Za-z]{0,2}\d+[a-z*]?(?:\/\d+)?)\)$/;
+
 function slimCard(c) {
   const types = (c.cardType?.type || []).map((t) => t.id);
   return {
@@ -78,6 +102,8 @@ function slimCard(c) {
     energy: c.energy?.value ?? c.energy ?? null,
     might: c.might?.value ?? c.might ?? null,
     power: c.power?.value ?? c.power ?? null,
+    // Illustrateur (« League Splash Team », « Six More Vodka »…), utile pour distinguer les versions.
+    illustrator: c.illustrator?.values?.[0]?.label || null,
     // Impression « de base » (ni alternative "a", ni "star", ni promo) : préférée à l'affichage.
     base: /^[a-z]+-\d+-\d+$/.test(c.id),
   };
@@ -98,8 +124,12 @@ function addIndex(map, key, card) {
 function buildIndex(cards) {
   const byName = new Map();
   const byBaseName = new Map();
+  const byCode = new Map();
   for (const c of cards) {
     addIndex(byName, normalizeName(c.name), c);
+    // Code de collection -> impression exacte (« 3 Fiora, Peerless (SFD-110a) » désigne l'art alternatif).
+    const ck = codeKey(c.publicCode);
+    if (ck && !byCode.has(ck)) byCode.set(ck, c);
     // Les légendes s'appellent « Rogue Assassin » avec le tag « Akali » ;
     // les decklists écrivent « Akali, Rogue Assassin ».
     if (c.type === 'legend') {
@@ -114,13 +144,13 @@ function buildIndex(cards) {
   const byRank = (a, b) => rankCard(a) - rankCard(b) || String(a.publicCode).localeCompare(String(b.publicCode));
   for (const list of byName.values()) list.sort(byRank);
   for (const list of byBaseName.values()) list.sort(byRank);
-  return { byName, byBaseName };
+  return { byName, byBaseName, byCode };
 }
 
 function setCards(cards, fetchedAt, source, meta) {
   state.cards = cards;
   if (meta) state.meta = meta;
-  ({ byName: state.byName, byBaseName: state.byBaseName } = buildIndex(cards));
+  ({ byName: state.byName, byBaseName: state.byBaseName, byCode: state.byCode } = buildIndex(cards));
   state.fetchedAt = fetchedAt;
   state.source = source;
 }
@@ -189,13 +219,18 @@ export async function refreshCatalog() {
   }
 }
 
+const RETRY_MS = 10 * 60 * 1000; // nouvel essai API quand on tourne sur un cache d'ancienne version
+
 export async function initCatalog(db) {
   state.db = db;
+  let outdated = null; // cache d'une version antérieure : repli si l'API est injoignable au démarrage
   try {
     const cached = await db.collection('cards_catalog').findOne({ _id: 'catalog' });
     if (cached?.cards?.length && cached.version === CATALOG_VERSION) {
       setCards(cached.cards, cached.fetchedAt, 'cache', cached.meta);
       console.log(`Catalogue Riftbound : ${cached.cards.length} cartes depuis le cache (${cached.fetchedAt.toISOString()}).`);
+    } else if (cached?.cards?.length) {
+      outdated = cached;
     }
   } catch (err) {
     console.error('Catalogue Riftbound : cache illisible —', err.message);
@@ -205,6 +240,17 @@ export async function initCatalog(db) {
     // Sans catalogue du tout, on attend l'API (quelques secondes) ; sinon on rafraîchit en arrière-plan.
     if (state.cards.length === 0) await refreshCatalog();
     else refreshCatalog();
+  }
+  if (state.cards.length === 0 && outdated) {
+    // API injoignable et cache d'une ancienne forme : mieux vaut un catalogue un peu daté que rien du tout.
+    // Les champs ajoutés depuis (`illustrator`, `baseName`…) peuvent manquer : le code les traite comme absents.
+    setCards(outdated.cards, outdated.fetchedAt, 'cache-outdated', outdated.meta);
+    console.warn(`Catalogue Riftbound : API injoignable, cache v${outdated.version ?? 1} utilisé (${outdated.cards.length} cartes) ; nouvel essai dans ${RETRY_MS / 60000} min.`);
+    const retry = async () => {
+      await refreshCatalog();
+      if (state.source !== 'api') setTimeout(retry, RETRY_MS).unref();
+    };
+    setTimeout(retry, RETRY_MS).unref();
   }
   setInterval(refreshCatalog, REFRESH_MS).unref();
 }
@@ -224,9 +270,31 @@ export function catalogMeta() {
  * Résolution d'un nom de carte : `{ card, ambiguous, candidates }` ou null.
  * `ambiguous` = la carte a été choisie par repli sur le nom nu (« Fiora » -> « Fiora, Victorious »
  * parmi Peerless / Victorious / Worthy) ; `candidates` liste alors les noms complets possibles.
+ * Un suffixe « (CODE) » (« Fiora, Peerless (SFD-110a) ») désigne une impression précise (art alternatif,
+ * showcase, réimpression) : c'est elle qui est renvoyée, si le code est connu et correspond bien au nom
+ * écrit ; sinon le suffixe est ignoré et le nom seul est résolu (impression de base).
  * Les objets carte du catalogue ne sont jamais modifiés.
  */
 function lookup(name, { type } = {}) {
+  // Borne de sécurité (un nom réel fait < 120 caractères) : les regex ci-dessous restent linéaires.
+  name = String(name || '').trim().slice(0, 300);
+  const coded = TRAILING_CODE_RE.exec(name);
+  if (coded) {
+    const printing = state.byCode.get(codeKey(coded[2]));
+    const written = coded[1].trim();
+    if (printing && (!type || printing.type === type)) {
+      // Le nom écrit doit désigner la même carte (garde-fou contre un code recopié de travers) : nom complet,
+      // alias de légende (« Akali, Rogue Assassin »), ou nom nu ambigu (« Ahri (OGN-119a) ») dont l'impression
+      // fait partie des candidates — le code lève alors l'ambiguïté.
+      const byWrittenName = written ? lookup(written, { type }) : null;
+      const sameCard =
+        !written ||
+        (byWrittenName && byWrittenName.card.name === printing.name) ||
+        (byWrittenName && byWrittenName.ambiguous && (byWrittenName.candidates || []).includes(printing.name)) ||
+        (printing.baseName && normalizeName(printing.baseName) === normalizeName(written));
+      if (sameCard) return { card: printing, ambiguous: false };
+    }
+  }
   const key = normalizeName(name);
   if (!key) return null;
   const filtered = (list) => (list && type ? list.filter((c) => c.type === type) : list) || [];
@@ -244,8 +312,9 @@ function lookup(name, { type } = {}) {
   if (hit) return hit;
   // « Nom (précision) » / « Fiora, Peerless (SFD-110) » -> « Fiora, Peerless », avant tout repli ambigu
   // (sur le nom brut : normalizeName remplace les parenthèses par des espaces, le suffixe ne serait plus repérable).
-  const noParen = String(name).replace(/\s*\([^)]*\)\s*$/, '').trim();
-  if (noParen && noParen !== String(name).trim()) return lookup(noParen, { type });
+  // Regex sans `\s*` de tête sur une chaîne déjà trim : pas de retour arrière quadratique.
+  const noParen = name.replace(/\([^)]*\)$/, '').trimEnd();
+  if (noParen && noParen !== name) return lookup(noParen, { type });
   if (key.includes(',')) {
     // « Akali, Rogue Assassin » -> « Rogue Assassin » (légendes).
     const after = key.split(',').slice(1).join(',').trim();
@@ -290,13 +359,16 @@ const DEFAULT_TYPE_FOR_SECTION = { legend: 'legend', battlefields: 'battlefield'
 /**
  * Parse une decklist texte (format export Riftbound) :
  *   Legend:\n1 Akali, Rogue Assassin\n\nMainDeck:\n3 Noxus Hopeful ...
- * Tolère « 3x Nom », « Nom x3 », les en-têtes FR/EN avec ou sans « : », et les lignes sans en-tête (-> deck principal).
+ * Tolère « 3x Nom », « Nom x3 », les en-têtes FR/EN avec ou sans « : », les lignes sans en-tête (-> deck principal)
+ * et un code de collection en suffixe « 3 Fiora, Peerless (SFD-110a) » (impression précise, conservé dans `name`).
  */
 export function parseDecklist(text) {
   const sections = new Map(SECTIONS.map((s) => [s.key, []]));
   let current = 'main';
   for (const raw of String(text || '').split(/\r?\n/)) {
-    const line = raw.trim();
+    // Une vraie ligne ne dépasse pas ~120 caractères : on borne avant toute regex (retour arrière quadratique
+    // sur de longues suites de blancs, sinon ~0,5 s CPU par ligne de 20 000 caractères).
+    const line = raw.trim().slice(0, 200);
     if (!line) {
       // Une ligne vide clôt la section légende/champion (une seule carte chacune).
       if (current === 'legend' || current === 'champion') current = 'main';
@@ -318,7 +390,10 @@ export function parseDecklist(text) {
       qty = parseInt(m[2], 10);
       name = m[1];
     }
-    name = name.replace(/\s*\([A-Z]{2,4}-\d+[^)]*\)\s*$/, '').trim(); // code de collection éventuel
+    // Un code de collection entre parenthèses (« Fiora, Peerless (SFD-110a) ») est conservé : il désigne
+    // l'impression exacte (art alternatif…) et est compris par lookup(). Il reste dans le nom pour survivre
+    // à un aller-retour serializeDecklist (side deck) et être affiché tel quel si la carte est inconnue.
+    name = name.trim();
     if (!name) continue;
     // Légende / champion : une seule carte ; le surplus part dans le deck principal.
     const target = (current === 'legend' || current === 'champion') && sections.get(current).length ? 'main' : current;
@@ -329,10 +404,18 @@ export function parseDecklist(text) {
 
 const DOMAIN_LABELS = { fury: 'Fury', calm: 'Calm', mind: 'Mind', body: 'Body', chaos: 'Chaos', order: 'Order' };
 
+/** Impression préférée (de base) d'un nom de carte : celle que renvoie `findCard(nom)`. */
+function preferredPrinting(card) {
+  const list = state.byName.get(normalizeName(card.name));
+  return list && list.length ? list[0] : card;
+}
+
 /**
  * Résout une decklist texte. Chaque ligne : `{ qty, name, card }` (+ `ambiguous: true` et
  * `candidates: [noms complets]` quand le nom écrit sans sous-titre a été rattaché par repli à l'une
- * de plusieurs cartes, ex. « 3 Fiora »). `unknown` / `ambiguous` = nombre de lignes concernées.
+ * de plusieurs cartes, ex. « 3 Fiora » ; + `alt: true` quand l'impression résolue n'est pas l'impression
+ * préférée de la carte, ex. « Fiora, Peerless (SFD-110a) » — une carte qui n'existe qu'en jeton « -t## »
+ * n'est donc pas « alternative »). `unknown` / `ambiguous` = nombre de lignes concernées.
  */
 export function resolveDecklist(text) {
   const parsed = parseDecklist(text);
@@ -346,7 +429,9 @@ export function resolveDecklist(text) {
         const card = hit?.card || null;
         if (!card) unknown++;
         if (hit?.ambiguous) ambiguous++;
-        return hit?.ambiguous ? { ...line, card, ambiguous: true, candidates: hit.candidates } : { ...line, card };
+        const out = hit?.ambiguous ? { ...line, card, ambiguous: true, candidates: hit.candidates } : { ...line, card };
+        if (card && preferredPrinting(card).id !== card.id) out.alt = true;
+        return out;
       });
       const count = cards.reduce((n, c) => n + c.qty, 0);
       if (s.key !== 'sideboard') total += count;
@@ -407,10 +492,11 @@ function variantLabel(c, primary) {
   if (c.rarity === 'showcase') return 'Showcase';
   if (/-star-/.test(c.id)) return 'Étoile';
   if (/^[a-z]+-\d+a-\d+$/.test(c.id)) return 'Art alternatif';
-  if (/-sp\d/.test(c.id) || /-(r|t)\d+$/.test(c.id)) return 'Promo';
+  if (/-sp\d/.test(c.id) || /-t\d+$/.test(c.id)) return 'Promo';
   // « VEN-187/166 » : numéro au-delà de la taille du set = tirage alternatif de fin de set.
   const m = /^[A-Z]+-(\d+)\/(\d+)$/.exec(c.publicCode || '');
   if (m && Number(m[1]) > Number(m[2])) return 'Art alternatif';
+  // Même carte dans un autre set (« VEN-R04 » = Body Rune du set Vendetta) : réimpression.
   if (primary && primary.set !== c.set) return 'Réimpression';
   return 'Variante';
 }
@@ -418,7 +504,8 @@ function variantLabel(c, primary) {
 /**
  * Catalogue pour le deckbuilder : toutes les impressions avec image (sans les jetons, cartes sans type),
  * dont une « principale » par nom complet (`primary: true`, impression de base préférée) ; les autres
- * sont des variantes (`variant: true`, `variantOf` = id de la principale, `variantLabel`).
+ * sont des variantes (`variant: true`, `variantOf` = id de la principale, `variantLabel`). `shortCode` = code
+ * court (« SFD-110a ») que le client ajoute au nom dans l'export pour désigner une variante.
  * Le regroupement se fait sur `name` (nom complet, sous-titre inclus pour les unités) : « Fiora, Peerless »
  * et « Fiora, Victorious » sont deux cartes distinctes, « Fiora, Peerless » SFD-110 et SFD-110a une seule.
  * Le résultat est mémorisé jusqu'au prochain rafraîchissement du catalogue.
@@ -458,6 +545,9 @@ export function catalogForClient() {
       energy: numericValue(c.energy),
       might: numericValue(c.might),
       power: numericValue(c.power),
+      illustrator: c.illustrator || null,
+      // Code court à écrire dans une decklist pour désigner cette impression (« SFD-110a »).
+      shortCode: shortCode(c),
       primary: isPrimary,
       variant: !isPrimary,
       variantOf: isPrimary ? null : primary.id,
@@ -503,18 +593,42 @@ export function applySiding(text, { out = [], in: inn = [] }) {
     const bare = (card, other) => !!card && card.baseName !== card.name && normalizeName(card.baseName) === normalizeName(other);
     return bare(ca, b) || bare(cb, a);
   };
-  const findLine = (lines, name) => lines.find((l) => normalizeName(l.name) === normalizeName(name)) || lines.find((l) => sameLine(l.name, name));
+  // Toutes les lignes désignant la même carte, nom exact d'abord : un deck peut mélanger plusieurs impressions
+  // (« 2 Akali, Deadly Weapon (VEN-021a) » + « 1 Akali, Deadly Weapon »), le side doit pouvoir les vider toutes.
+  const findLines = (lines, name) => {
+    const exact = lines.filter((l) => normalizeName(l.name) === normalizeName(name));
+    return [...exact, ...lines.filter((l) => !exact.includes(l) && sameLine(l.name, name))];
+  };
+  // Ligne de destination où fusionner : même nom écrit ; sinon même carte, mais seulement si aucune des deux
+  // lignes ne porte de code d'impression (un « (VEN-021a) » sorti du deck reste une ligne à part en réserve,
+  // sans se fondre dans le « Akali, Deadly Weapon » de base déjà présent — et inversement).
+  const hasCode = (name) => TRAILING_CODE_RE.test(String(name).trimEnd());
+  const findDst = (lines, name) =>
+    lines.find((l) => normalizeName(l.name) === normalizeName(name)) ||
+    (hasCode(name) ? null : lines.find((l) => !hasCode(l.name) && sameLine(l.name, name)));
   const move = (from, to, list) => {
     for (const c of list) {
-      const src = findLine(from, c.name);
-      const qty = Math.min(c.qty, src ? src.qty : c.qty);
-      if (src) src.qty -= qty;
-      // Destination cherchée avec le nom de la ligne source (complet) : « Fiora » sorti de « Fiora, Peerless »
-      // ne doit pas fusionner avec un « Fiora, Victorious » déjà en réserve.
-      const name = src ? src.name : c.name;
-      const dst = findLine(to, name);
-      if (dst) dst.qty += qty;
-      else to.push({ qty, name });
+      const sources = findLines(from, c.name);
+      if (!sources.length) {
+        // Carte absente de la source (side saisi à la main) : on la crée quand même à destination.
+        const dst = findDst(to, c.name);
+        if (dst) dst.qty += c.qty;
+        else to.push({ qty: c.qty, name: c.name });
+        continue;
+      }
+      let remaining = c.qty;
+      for (const src of sources) {
+        if (remaining <= 0) break;
+        const qty = Math.min(remaining, src.qty);
+        if (qty <= 0) continue;
+        src.qty -= qty;
+        remaining -= qty;
+        // Destination cherchée avec le nom de la ligne source (complet, code compris) : « Fiora » sorti de
+        // « Fiora, Peerless » ne doit pas fusionner avec un « Fiora, Victorious » déjà en réserve.
+        const dst = findDst(to, src.name);
+        if (dst) dst.qty += qty;
+        else to.push({ qty, name: src.name });
+      }
     }
     for (let i = from.length - 1; i >= 0; i--) if (from[i].qty <= 0) from.splice(i, 1);
   };

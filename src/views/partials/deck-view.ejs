@@ -10,6 +10,10 @@ const mark = (line) => {
   return hl[(c ? c.name : line.name).toLowerCase()] || (c && c.baseName ? hl[c.baseName.toLowerCase()] : null) || null;
 };
 const ambiguousTitle = (line) => `Nom ambigu : précise le sous-titre (${(line.candidates || []).join(' / ')})`;
+// Impression alternative (art alternatif, showcase, réimpression) choisie dans la decklist (« Nom (SFD-110a) ») :
+// c'est son image qui est affichée (line.card est l'impression exacte) ; resolveDecklist pose `alt` quand elle
+// diffère de l'impression préférée de la carte (une carte qui n'existe qu'en jeton n'est pas « alternative »).
+const isAlt = (line) => !!(line.card && line.alt);
 %>
 <% if (resolved.empty) { %>
   <div class="deck-view-empty muted">Colle ta decklist pour voir le deck apparaître ici.</div>
@@ -47,9 +51,10 @@ const ambiguousTitle = (line) => `Nom ambigu : précise le sous-titre (${(line.c
           <% for (const line of s.cards) { %>
             <% if (line.card && line.card.image) { %>
               <% const m = mark(line); %>
-              <a href="<%= line.card.image %>" target="_blank" rel="noopener" class="card-thumb<%= m ? ' card-sided card-sided-' + m : '' %>" data-full="<%= line.card.image %>" title="<%= line.card.name %> · <%= line.card.publicCode %><%= m === 'in' ? ' · entrée par side' : m === 'out' ? ' · sortie par side' : '' %><%= line.ambiguous ? ' · ' + ambiguousTitle(line) : '' %>">
+              <a href="<%= line.card.image %>" target="_blank" rel="noopener" class="card-thumb<%= m ? ' card-sided card-sided-' + m : '' %>" data-full="<%= line.card.image %>" title="<%= line.card.name %> · <%= line.card.publicCode %><%= isAlt(line) ? ' · impression alternative' + (line.card.illustrator ? ' · ' + line.card.illustrator : '') : '' %><%= m === 'in' ? ' · entrée par side' : m === 'out' ? ' · sortie par side' : '' %><%= line.ambiguous ? ' · ' + ambiguousTitle(line) : '' %>">
                 <img src="<%= thumb(line.card.image, s.key === 'battlefields' ? 400 : 250) %>" alt="<%= line.card.name %>" loading="lazy">
                 <span class="qty">×<%= line.qty %></span>
+                <% if (isAlt(line)) { %><span class="print-badge" title="Impression alternative · <%= line.card.publicCode %>">✦</span><% } %>
                 <% if (line.ambiguous) { %><span class="sided-badge warn" style="background:#fbbf24;color:#111" title="<%= ambiguousTitle(line) %>">?</span><% } %>
                 <% if (m) { %><span class="sided-badge"><%= m === 'in' ? 'IN' : 'OUT' %></span><% } %>
               </a>

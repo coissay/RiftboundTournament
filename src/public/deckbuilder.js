@@ -56,10 +56,21 @@
       };
     },
 
-    /** Nom tel qu'il doit apparaître dans une decklist : « Akali, Rogue Assassin » pour les légendes. */
+    /** Code de collection court d'une impression : « SFD-110a/221 » → « SFD-110a » (idem shortCode côté serveur). */
+    shortCode(card) {
+      return card.shortCode || String(card.publicCode || '').replace(/\/\d+$/, '');
+    },
+
+    /**
+     * Nom tel qu'il doit apparaître dans une decklist : « Akali, Rogue Assassin » pour les légendes.
+     * Une impression alternative (art alternatif, showcase, réimpression) porte son code de collection en
+     * suffixe, « Fiora, Peerless (SFD-110a) », que le serveur résout vers cette impression exacte ;
+     * l'impression principale garde le nom nu.
+     */
     exportName(card) {
-      if (card.type === 'legend' && card.tags && card.tags.length) return `${card.tags[0]}, ${card.name}`;
-      return card.name;
+      const base = card.type === 'legend' && card.tags && card.tags.length ? `${card.tags[0]}, ${card.name}` : card.name;
+      const code = card.variant ? Core.shortCode(card) : '';
+      return code ? `${base} (${code})` : base;
     },
 
     /** Identifiant de « famille » d'une carte : son impression principale (les variantes partagent la même). */
@@ -110,6 +121,23 @@
       }
       if (section === 'main' && Core.count(s.main) + Core.count(s.champion) >= 40) return 'Le deck principal est complet (40 cartes, champion inclus).';
       return null;
+    },
+
+    /**
+     * Fait passer tous les exemplaires d'une carte (toutes sections, toutes impressions) à l'impression `newId`.
+     * Renvoie le nombre d'exemplaires concernés (0 si la carte n'est pas dans le deck).
+     */
+    swapFamily(deck, family, newId, byId) {
+      const n = Core.copiesOf(deck, family, byId, SECTION_ORDER);
+      if (!n) return 0;
+      for (const key of SECTION_ORDER) {
+        // Copie de la liste : swapPrinting peut fusionner (et donc retirer) des entrées en cours de parcours.
+        for (const e of deck.sections[key].slice()) {
+          const c = e.id ? byId.get(e.id) : null;
+          if (c && Core.familyOf(c) === family && e.id !== newId) Core.swapPrinting(deck, key, Core.entryKey(e), newId);
+        }
+      }
+      return n;
     },
 
     /** Change l'impression d'une entrée (même carte, autre version). Fusionne si la version existe déjà dans la section. */
@@ -358,8 +386,16 @@
     copy: $('db-copy'), exportText: $('db-export-text'),
     importDialog: $('db-import-dialog'), importText: $('db-import-text'), importGo: $('db-import-go'), importError: $('db-import-error'),
     updateForm: $('db-update-form'), updateDomains: $('db-update-domains'),
+    actions: $('db-actions'), mobileBar: $('db-mobile-bar'), mobileCounters: $('db-mobile-counters'), mobileDot: $('db-mobile-dot'), mobileJump: $('db-mobile-jump'),
   };
   if (!els.grid) return;
+
+  // Pointeur : le clic droit n'existe qu'à la souris (un appui long tactile ne doit pas retirer une carte) ;
+  // sur mobile (≤ 960 px) le panneau deck passe sous la galerie (sections repliables + barre de résumé).
+  const mq = (q) => (window.matchMedia ? window.matchMedia(q) : null);
+  const finePointer = () => { const m = mq('(pointer: fine)'); return !m || m.matches; };
+  const isMobileLayout = () => { const m = mq('(max-width: 960px)'); return !!m && m.matches; };
+  const collapsed = new Set(); // sections repliées par l'utilisateur sur mobile (l'état survit aux re-rendus)
 
   let catalog = []; // cartes du catalogue client
   const byId = new Map();
@@ -442,27 +478,56 @@
     return families.get(Core.familyOf(card)) || [card];
   }
 
+  /** Libellé du « + » de la galerie selon la cible « Ajouter à » et la carte (deck / réserve / champion). */
+  function addLabelFor(card) {
+    if (addTarget === 'sideboard' && card.type !== 'legend' && card.type !== 'battlefield' && card.type !== 'rune') return 'Ajouter à la réserve';
+    if (addTarget === 'champion' && card.type === 'unit') return 'Définir comme champion';
+    return 'Ajouter au deck';
+  }
+
+  /** Bouton « N versions » posé sur la vignette (galerie) : ouvre le sélecteur d'illustration. */
+  function versionsBadgeHtml(c) {
+    const n = printingsOf(c).length;
+    if (n < 2) return '';
+    const label = `${n} versions`;
+    return `<button type="button" class="db-versions-badge" data-act="versions" aria-haspopup="dialog" aria-label="${esc(label)} de ${esc(c.name)} : choisir l'illustration" title="${esc(label)} : choisir l'illustration">🎨 ${n} versions</button>`;
+  }
+
+  /**
+   * Compteur « − [qté] + » : moins à gauche, plus à droite, quantité au milieu quand > 0.
+   * `plus` false = pas de bouton + (légende / champion : un seul exemplaire).
+   */
+  function stepperHtml(name, qty, { dec, inc, plus = true, addLabel = 'Ajouter un exemplaire' } = {}) {
+    return `
+      <span class="db-stepper" role="group" aria-label="Exemplaires de ${esc(name)}">
+        <button type="button" data-act="${dec}" aria-label="Retirer un exemplaire de ${esc(name)}" title="Retirer un exemplaire">−</button>
+        <span class="db-stepper-qty" aria-live="polite">${qty ? qty : ''}</span>
+        ${plus ? `<button type="button" data-act="${inc}" aria-label="${esc(addLabel)} : ${esc(name)}" title="${esc(addLabel)}">+</button>` : ''}
+      </span>`;
+  }
+
   function cardHtml(c) {
     const qty = Core.qtyInDeck(deck, c.id, byId);
-    const nbVersions = printingsOf(c).length;
     const landscape = c.orientation === 'landscape';
     const canChampion = c.type === 'unit';
     const canSide = c.type !== 'legend' && c.type !== 'battlefield' && c.type !== 'rune';
+    const secondary = [
+      canChampion ? `<button type="button" data-act="champion" aria-label="Définir ${esc(c.name)} comme champion" title="Définir comme champion">★</button>` : '',
+      canSide ? `<button type="button" data-act="side" aria-label="Ajouter ${esc(c.name)} à la réserve" title="Ajouter à la réserve">R</button>` : '',
+    ].join('');
     return `
       <article class="db-card${qty ? ' in-deck' : ''}" data-id="${esc(c.id)}">
-        <div class="card-thumb${landscape ? ' card-thumb-landscape' : ''}" data-full="${esc(c.image)}" title="${esc(c.name)} · ${esc(c.publicCode)} · ${esc(TYPE_LABELS[c.type] || c.type)}">
+        <div class="card-thumb${landscape ? ' card-thumb-landscape' : ''}" data-full="${esc(c.image)}" role="img" aria-label="${esc(c.name)} · ${esc(c.publicCode)} · ${esc(TYPE_LABELS[c.type] || c.type)}" title="${esc(c.name)} · ${esc(c.publicCode)} · ${esc(TYPE_LABELS[c.type] || c.type)}${c.illustrator ? ' · ' + esc(c.illustrator) : ''}">
           <img src="${esc(thumbUrl(c.image, 250))}" alt="${esc(c.name)}" loading="lazy">
           ${c.energy != null ? `<span class="db-energy">${c.energy}</span>` : ''}
           ${c.variant ? `<span class="db-variant" title="Impression alternative · ${esc(c.publicCode)}">${esc(c.variantLabel || 'Variante')}</span>` : ''}
-          ${nbVersions > 1 ? `<button type="button" class="db-versions-badge" data-act="versions" title="${nbVersions} versions disponibles : choisir l'illustration">🎨 ${nbVersions}</button>` : ''}
+          ${versionsBadgeHtml(c)}
           ${qty ? `<span class="qty">×${qty}</span>` : ''}
         </div>
         <div class="db-card-name">${esc(c.name)}</div>
         <div class="db-card-actions">
-          <button type="button" data-act="add" title="Ajouter au deck">+</button>
-          <button type="button" data-act="remove" title="Retirer du deck">−</button>
-          ${canChampion ? '<button type="button" data-act="champion" title="Définir comme champion">★</button>' : ''}
-          ${canSide ? '<button type="button" data-act="side" title="Ajouter à la réserve">R</button>' : ''}
+          ${stepperHtml(c.name, qty, { dec: 'remove', inc: 'add', addLabel: addLabelFor(c) })}
+          ${secondary ? `<span class="db-actions-sep" aria-hidden="true"></span>${secondary}` : ''}
         </div>
       </article>`;
   }
@@ -476,11 +541,26 @@
     els.more.textContent = `Afficher plus (${rest} restante${rest > 1 ? 's' : ''})`;
   }
 
-  /** Met à jour uniquement les compteurs ×N de la galerie (évite de recharger toutes les images). */
+  /** Cible « Ajouter à » changée : libellés des « + » de la galerie et indice visuel (data-target → CSS). */
+  function refreshAddTargetHints() {
+    els.grid.dataset.target = addTarget;
+    for (const art of els.grid.querySelectorAll('.db-card')) {
+      const card = byId.get(art.dataset.id);
+      const btn = art.querySelector('button[data-act="add"]');
+      if (!card || !btn) continue;
+      const label = addLabelFor(card);
+      btn.title = label;
+      btn.setAttribute('aria-label', `${label} : ${card.name}`);
+    }
+  }
+
+  /** Met à jour uniquement les compteurs ×N et « − N + » de la galerie (évite de recharger toutes les images). */
   function refreshGalleryQuantities() {
     for (const art of els.grid.querySelectorAll('.db-card')) {
       const qty = Core.qtyInDeck(deck, art.dataset.id, byId);
       art.classList.toggle('in-deck', qty > 0);
+      const stepQty = art.querySelector('.db-stepper-qty');
+      if (stepQty) stepQty.textContent = qty ? String(qty) : '';
       let badge = art.querySelector('.qty');
       if (qty && !badge) {
         badge = document.createElement('span');
@@ -504,20 +584,23 @@
     const thumb = card
       ? `<span class="card-thumb db-line-thumb${card.orientation === 'landscape' ? ' card-thumb-landscape' : ''}" data-full="${esc(card.image)}"><img src="${esc(thumbUrl(card.image, 120))}" alt=""></span>`
       : '<span class="db-line-unknown" title="Carte non reconnue dans le catalogue">?</span>';
+    const displayName = card ? (card.type === 'legend' && card.tags && card.tags.length ? `${card.tags[0]}, ${card.name}` : card.name) : e.name;
     const name = card
-      ? `${esc(Core.exportName(card))}${card.variant ? `<small class="db-line-variant">${esc(card.variantLabel || 'Variante')}</small>` : ''}${card.energy != null ? `<small>${card.energy}</small>` : ''}`
+      ? `${esc(displayName)}${card.variant ? `<small class="db-line-variant" title="${esc(card.publicCode)}">${esc(card.variantLabel || 'Variante')}</small>` : ''}${card.energy != null ? `<small>${card.energy}</small>` : ''}`
       : `<span class="warn">⚠ ${esc(e.name)}</span>`;
-    const versionsBtn = card && printingsOf(card).length > 1 ? `<button type="button" data-act="versions" title="Changer d'illustration (${printingsOf(card).length} versions)">🎨</button>` : '';
-    const championBtn = section === 'main' && card && card.type === 'unit' ? '<button type="button" data-act="champion" title="Définir comme champion (déplace 1 exemplaire)">★</button>' : '';
-    const sideBtn = section === 'main' ? '<button type="button" data-act="to-side" title="Déplacer 1 exemplaire en réserve">R</button>' : section === 'sideboard' ? '<button type="button" data-act="to-main" title="Déplacer 1 exemplaire dans le deck principal">↑</button>' : '';
+    const nbVersions = card ? printingsOf(card).length : 0;
+    const versionsBtn = nbVersions > 1 ? `<button type="button" class="db-line-versions" data-act="versions" aria-haspopup="dialog" aria-label="Changer l'illustration de ${esc(displayName)} (${nbVersions} versions)" title="Changer d'illustration (${nbVersions} versions)">🎨</button>` : '';
+    const championBtn = section === 'main' && card && card.type === 'unit' ? `<button type="button" data-act="champion" aria-label="Définir ${esc(displayName)} comme champion" title="Définir comme champion (déplace 1 exemplaire)">★</button>` : '';
+    const sideBtn = section === 'main'
+      ? `<button type="button" data-act="to-side" aria-label="Déplacer un exemplaire de ${esc(displayName)} en réserve" title="Déplacer 1 exemplaire en réserve">R</button>`
+      : section === 'sideboard' ? `<button type="button" data-act="to-main" aria-label="Déplacer un exemplaire de ${esc(displayName)} dans le deck principal" title="Déplacer 1 exemplaire dans le deck principal">↑</button>` : '';
+    const secondary = `${versionsBtn}${championBtn}${sideBtn}`;
     return `
-      <li class="db-line" data-section="${section}" data-key="${esc(key)}">
+      <li class="db-line${over ? ' over' : ''}" data-section="${section}" data-key="${esc(key)}">
         ${thumb}
-        <span class="db-line-name" title="${esc(card ? card.publicCode : e.name)}">${name}</span>
-        <span class="db-line-qty${over ? ' over' : ''}">×${e.qty}</span>
-        <button type="button" data-act="dec" title="Retirer un exemplaire">−</button>
-        ${single ? '' : '<button type="button" data-act="inc" title="Ajouter un exemplaire">+</button>'}
-        ${versionsBtn}${championBtn}${sideBtn}
+        <span class="db-line-name" title="${esc(card ? card.publicCode : e.name)}" aria-label="${esc(displayName)}${card ? ' · ' + esc(card.publicCode) : ' (carte non reconnue)'}">${name}</span>
+        ${stepperHtml(displayName, e.qty, { dec: 'dec', inc: 'inc', plus: !single })}
+        ${secondary ? `<span class="db-actions-sep" aria-hidden="true"></span>${secondary}` : ''}
       </li>`;
   }
 
@@ -563,21 +646,27 @@
         counter = `${check.value} / ${check.target}`;
         cls = check.ok ? 'ok' : 'ko';
       }
-      const legendHelp = key === 'legend' && entries[0] && entries[0].id && byId.get(entries[0].id) && byId.get(entries[0].id).tags.length
-        ? `<button type="button" class="db-icon-btn" data-act="search-tag" data-tag="${esc(byId.get(entries[0].id).tags[0])}" title="Chercher les cartes « ${esc(byId.get(entries[0].id).tags[0])} » dans la galerie">🔍 ${esc(byId.get(entries[0].id).tags[0])}</button>`
+      const legendTag = key === 'legend' && entries[0] && entries[0].id && byId.get(entries[0].id) && byId.get(entries[0].id).tags.length ? byId.get(entries[0].id).tags[0] : '';
+      const legendHelp = legendTag
+        ? `<button type="button" class="db-icon-btn" data-act="search-tag" data-tag="${esc(legendTag)}" aria-label="Chercher les cartes « ${esc(legendTag)} » dans la galerie" title="Chercher les cartes « ${esc(legendTag)} » dans la galerie">🔍 ${esc(legendTag)}</button>`
         : '';
-      return `
-        <section class="db-section" data-section="${key}">
-          <h3><span>${esc(meta.label)} ${legendHelp}${key === 'main' ? '<small>(champion inclus)</small>' : ''}</span><span class="db-count ${cls}">${counter}</span></h3>
-          <ul>${entries.length ? entries.map((e) => lineHtml(e, key, overKeys)).join('') : `<li class="db-section-empty">${key === 'sideboard' ? 'Aucune carte en réserve.' : 'Vide — clique sur une carte de la galerie.'}</li>`}</ul>
-        </section>`;
+      const head = `<h3><span>${esc(meta.label)} ${legendHelp}${key === 'main' ? '<small>(champion inclus)</small>' : ''}</span><span class="db-count ${cls}">${counter}</span></h3>`;
+      const body = `<ul>${entries.length ? entries.map((e) => lineHtml(e, key, overKeys)).join('') : `<li class="db-section-empty">${key === 'sideboard' ? 'Aucune carte en réserve.' : 'Vide — clique sur une carte de la galerie.'}</li>`}</ul>`;
+      // Mobile : section repliable (<details>), état mémorisé dans `collapsed` ; desktop : section simple.
+      if (isMobileLayout()) {
+        return `<details class="db-section" data-section="${key}"${collapsed.has(key) ? '' : ' open'}><summary>${head}</summary>${body}</details>`;
+      }
+      return `<section class="db-section" data-section="${key}">${head}${body}</section>`;
     }).join('');
 
-    // Export texte, boutons.
+    // Export texte, boutons. Deck existant : « Mettre à jour » est l'action principale (dorée, en tête), « nouveau deck » secondaire.
     els.exportText.value = Core.buildExport(deck, byId);
     els.name.value = deck.name;
     els.update.hidden = !deck.deckId;
     els.save.textContent = deck.deckId ? 'Enregistrer comme nouveau deck' : 'Enregistrer comme deck';
+    els.save.className = deck.deckId ? 'btn btn-ghost' : 'btn btn-gold';
+    els.update.className = 'btn btn-gold';
+    renderMobileBar(checks);
     els.source.hidden = !deck.deckId;
     if (deck.deckId) els.source.innerHTML = `Deck existant chargé : <a href="/decks/${esc(deck.deckId)}">voir la fiche</a>`;
 
@@ -591,7 +680,57 @@
 
   // ---------- Actions ----------
 
-  // ---------- Toast (règle bloquante) ----------
+  // ---------- Barre de résumé mobile ----------
+
+  const MOBILE_COUNTERS = [['main', 'Principal'], ['runes', 'Runes'], ['battlefields', 'CB']];
+  let deckInView = false;
+
+  /** Compteurs « Principal 12/40 · Runes 0/12 · CB 1/3 » + point de légalité, d'après les mêmes contrôles que le panneau. */
+  function renderMobileBar(checks) {
+    if (!els.mobileBar) return;
+    const parts = MOBILE_COUNTERS.map(([key, label]) => {
+      const c = checks.find((x) => x.key === key);
+      return c ? `${label} ${c.value}/${c.target}` : null;
+    }).filter(Boolean);
+    els.mobileCounters.textContent = parts.join(' · ');
+    const ok = checks.every((c) => c.ok);
+    els.mobileDot.classList.toggle('ok', ok);
+    els.mobileBar.title = ok ? 'Deck conforme' : 'Deck incomplet ou non conforme (voir les rappels de règles)';
+    els.mobileCounters.setAttribute('aria-label', `${parts.join(', ')} — ${ok ? 'deck conforme' : 'deck non conforme'}`);
+  }
+
+  function renderMobileJump() {
+    if (!els.mobileJump) return;
+    els.mobileJump.textContent = deckInView ? 'Galerie ▼' : 'Voir le deck ▲';
+    els.mobileJump.setAttribute('aria-label', deckInView ? 'Revenir à la galerie de cartes' : 'Aller au panneau du deck');
+  }
+
+  if (els.mobileJump) {
+    els.mobileJump.addEventListener('click', () => {
+      if (deckInView) window.scrollTo({ top: 0, behavior: 'smooth' });
+      else document.getElementById('db-deck').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    if ('IntersectionObserver' in window) {
+      const deckEl = document.getElementById('db-deck');
+      new IntersectionObserver((entries) => {
+        for (const e of entries) deckInView = e.isIntersecting;
+        renderMobileJump();
+      }, { threshold: 0.15 }).observe(deckEl);
+    }
+    renderMobileJump();
+  }
+  // Passage desktop ↔ mobile (rotation, redimensionnement) : re-rendre le panneau (sections repliables ou non).
+  const mobileMq = mq('(max-width: 960px)');
+  if (mobileMq && mobileMq.addEventListener) mobileMq.addEventListener('change', () => renderDeck());
+  // État replié/déplié des sections mobiles (toggle ne remonte pas : écoute en phase de capture).
+  els.sections.addEventListener('toggle', (ev) => {
+    const d = ev.target;
+    if (!d || d.tagName !== 'DETAILS' || !d.dataset.section) return;
+    if (d.open) collapsed.delete(d.dataset.section);
+    else collapsed.add(d.dataset.section);
+  }, true);
+
+  // ---------- Toast (refus ⛔ = rouge, avertissement ⚠ = ambre, sinon info neutre) ----------
 
   let toastTimer = null;
   function toast(msg) {
@@ -600,12 +739,18 @@
       el = document.createElement('div');
       el.id = 'db-toast';
       el.className = 'db-toast';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
       document.body.appendChild(el);
     }
-    el.textContent = msg;
+    const text = String(msg);
+    el.classList.remove('warn', 'info');
+    if (text.startsWith('⚠')) el.classList.add('warn');
+    else if (!text.startsWith('⛔')) el.classList.add('info');
+    el.textContent = text;
     el.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+    toastTimer = setTimeout(() => el.classList.remove('show'), text.length > 80 ? 4500 : 2600);
   }
 
   /** Ajoute un exemplaire en respectant les règles (sinon message et refus). */
@@ -637,31 +782,59 @@
   // ---------- Sélecteur de versions (illustrations alternatives) ----------
 
   let versionsEl = null;
+  let versionsAnchor = null; // bouton qui a ouvert le sélecteur : reprend le focus à la fermeture
   function closeVersions() {
-    if (versionsEl) versionsEl.remove();
+    if (!versionsEl) return;
+    const hadFocus = versionsEl.contains(document.activeElement);
+    versionsEl.remove();
     versionsEl = null;
+    if (hadFocus && versionsAnchor && document.body.contains(versionsAnchor)) versionsAnchor.focus();
+    versionsAnchor = null;
+  }
+
+  /** Impression(s) de la carte actuellement dans le deck (toutes sections), pour surligner la version utilisée. */
+  function printingsInDeck(card) {
+    const family = Core.familyOf(card);
+    const used = new Set();
+    for (const key of SECTION_ORDER) for (const e of deck.sections[key]) {
+      const c = e.id ? byId.get(e.id) : null;
+      if (c && Core.familyOf(c) === family) used.add(c.id);
+    }
+    return used;
   }
 
   /**
-   * Ouvre le choix des impressions d'une carte près de `anchor`.
+   * Ouvre le choix des impressions d'une carte près de `anchor` (boîte de dialogue légère : boutons,
+   * Échap ferme, focus sur la version utilisée puis retour sur `anchor`).
    * `onPick(card)` est appelé avec l'impression choisie.
    */
   function openVersions(card, anchor, onPick) {
     closeVersions();
     const list = printingsOf(card);
+    const used = printingsInDeck(card);
+    // Sans exemplaire dans le deck, la version « courante » est celle cliquée.
+    const current = used.size ? used : new Set([card.id]);
     document.dispatchEvent(new CustomEvent('card-popover:hide')); // le zoom au survol ne doit pas recouvrir le sélecteur
+    versionsAnchor = anchor && anchor.focus ? anchor : null;
     versionsEl = document.createElement('div');
     versionsEl.className = 'db-versions';
+    versionsEl.setAttribute('role', 'dialog');
+    versionsEl.setAttribute('aria-label', `Versions de ${card.name}`);
     versionsEl.setAttribute('data-popover-avoid', ''); // le zoom des versions se place à côté, jamais dessus
-    versionsEl.innerHTML = `
-      <div class="db-versions-head"><span>Versions de <b>${esc(card.name)}</b></span><button type="button" class="db-icon-btn" data-close title="Fermer">×</button></div>
-      <div class="db-versions-list">
-        ${list.map((p) => `
-          <button type="button" class="db-version${p.id === card.id ? ' current' : ''}" data-id="${esc(p.id)}">
+    const item = (p) => {
+      const isCurrent = current.has(p.id);
+      const label = p.primary ? 'Standard' : p.variantLabel || 'Variante';
+      const set = p.set ? `${p.set} · ${Core.shortCode(p)}` : Core.shortCode(p);
+      const aria = `${label}, ${set}${p.illustrator ? ', ' + p.illustrator : ''}${isCurrent ? ' (version utilisée)' : ''}`;
+      return `
+          <button type="button" class="db-version${isCurrent ? ' current' : ''}" data-id="${esc(p.id)}" aria-pressed="${isCurrent}" aria-label="${esc(aria)}" title="${esc(used.size ? 'Utiliser cette illustration pour tous les exemplaires' : 'Ajouter avec cette illustration')}">
             <span class="card-thumb${p.orientation === 'landscape' ? ' card-thumb-landscape' : ''}" data-full="${esc(p.image)}"><img src="${esc(thumbUrl(p.image, 160))}" alt=""></span>
-            <span class="db-version-label">${esc(p.primary ? 'Standard' : p.variantLabel || 'Variante')}<small>${esc(p.publicCode)}</small></span>
-          </button>`).join('')}
-      </div>`;
+            <span class="db-version-label"><b>${esc(label)}</b><small>${esc(set)}</small>${p.illustrator ? `<small class="db-version-artist">${esc(p.illustrator)}</small>` : ''}${isCurrent ? '<small class="db-version-current">✓ utilisée</small>' : ''}</span>
+          </button>`;
+    };
+    versionsEl.innerHTML = `
+      <div class="db-versions-head"><span>Versions de <b>${esc(card.name)}</b> <small class="muted">${used.size ? '· remplace tous les exemplaires du deck' : '· ajoute avec cette illustration'}</small></span><button type="button" class="db-icon-btn" data-close aria-label="Fermer" title="Fermer">×</button></div>
+      <div class="db-versions-list">${list.map(item).join('')}</div>`;
     document.body.appendChild(versionsEl);
     // Position : sous l'ancre, recalée dans la fenêtre.
     const r = anchor.getBoundingClientRect();
@@ -681,6 +854,34 @@
       closeVersions();
       if (picked) onPick(picked);
     });
+    // Focus sur la version utilisée (navigation clavier : flèches / Tab entre les versions, Échap ferme).
+    const focusTarget = versionsEl.querySelector('.db-version.current') || versionsEl.querySelector('.db-version');
+    if (focusTarget) focusTarget.focus();
+    versionsEl.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft' && ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
+      const items = Array.from(versionsEl.querySelectorAll('.db-version'));
+      const i = items.indexOf(document.activeElement);
+      if (i < 0) return;
+      ev.preventDefault();
+      const next = ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
+      items[next].focus();
+    });
+  }
+
+  /**
+   * Choix d'une impression depuis le sélecteur : si la carte est déjà dans le deck (n'importe quelle section,
+   * n'importe quelle impression), tous ses exemplaires passent à l'impression choisie ; sinon elle est ajoutée
+   * avec cette impression selon la cible courante (deck / réserve / champion).
+   */
+  function pickPrinting(picked) {
+    const swapped = Core.swapFamily(deck, Core.familyOf(picked), picked.id, byId);
+    if (swapped > 0) {
+      renderDeck();
+      return;
+    }
+    if (addTarget === 'champion' && picked.type === 'unit') setChampion(picked, false);
+    else if (addTarget === 'sideboard' && picked.type !== 'legend' && picked.type !== 'battlefield' && picked.type !== 'rune') addCard(picked, 'sideboard');
+    else addCard(picked);
   }
   document.addEventListener('click', (ev) => {
     if (versionsEl && !versionsEl.contains(ev.target) && !ev.target.closest('[data-act="versions"]')) closeVersions();
@@ -689,7 +890,10 @@
     if (ev.key === 'Escape') closeVersions();
   });
 
-  /** Retire un exemplaire depuis la galerie : d'abord du deck (section par défaut), sinon de la réserve. */
+  /**
+   * Retire un exemplaire depuis la galerie (« − » ou clic droit) : d'abord de la section visée par « Ajouter à »
+   * (réserve / champion), sinon de la section par défaut de la carte, puis champion, puis réserve.
+   */
   function removeCardFromGallery(card) {
     const section = Core.sectionForType(card.type);
     const family = Core.familyOf(card);
@@ -699,7 +903,8 @@
       const other = deck.sections[sec].find((e) => e.id && byId.get(e.id) && Core.familyOf(byId.get(e.id)) === family);
       return other ? Core.remove(deck, Core.entryKey(other), sec, 1) : false;
     };
-    if (!tryRemove(section) && !tryRemove('champion')) tryRemove('sideboard');
+    const order = addTarget === 'sideboard' ? ['sideboard', section, 'champion'] : addTarget === 'champion' ? ['champion', section, 'sideboard'] : [section, 'champion', 'sideboard'];
+    for (const sec of order) if (tryRemove(sec)) break;
     renderDeck();
   }
 
@@ -760,16 +965,22 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        // Message du serveur (`error`) si présent, sinon formulation lisible plutôt qu'un code HTTP.
+        let detail = '';
+        try { detail = (await res.json()).error || ''; } catch (_) { /* réponse non JSON */ }
+        throw new Error(detail || (res.status === 401 ? 'session expirée, reconnecte-toi' : 'liste illisible'));
+      }
       const data = await res.json();
       deck.sections = Core.fromResolved(data.sections);
       renderDeck();
       els.importDialog.close();
       els.importText.value = '';
-      warnAmbiguous(data.sections);
-      // Les lignes non reconnues (data.unknown) sont conservées telles quelles : affichées avec ⚠, exportées à l'identique.
+      // Les lignes non reconnues sont conservées telles quelles : affichées avec ⚠, exportées à l'identique.
+      if (data.unknown) toast(`⚠ ${data.unknown} ligne${data.unknown > 1 ? 's' : ''} non reconnue${data.unknown > 1 ? 's' : ''}, marquée${data.unknown > 1 ? 's' : ''} ⚠ dans le deck.`);
+      else warnAmbiguous(data.sections);
     } catch (e) {
-      els.importError.textContent = 'Import impossible : ' + e.message;
+      els.importError.textContent = 'Import impossible : ' + (e.name === 'TypeError' ? 'réseau indisponible' : e.message);
       els.importError.hidden = false;
     } finally {
       els.importGo.disabled = false;
@@ -794,17 +1005,15 @@
     if (!art) return;
     const card = byId.get(art.dataset.id);
     if (!card) return;
+    // Clic dans la barre d'actions mais hors bouton (ex. le chiffre du compteur) : rien.
+    if (!ev.target.closest('button') && ev.target.closest('.db-card-actions')) return;
     let act = ev.target.closest('button') ? ev.target.closest('button').dataset.act : 'add';
     // Clic simple : suit la cible « Ajouter à » (deck / réserve / champion).
     if (act === 'add' && addTarget === 'sideboard' && card.type !== 'legend' && card.type !== 'battlefield' && card.type !== 'rune') act = 'side';
     if (act === 'add' && addTarget === 'champion' && card.type === 'unit') act = 'champion';
     if (act === 'versions') {
-      // Choisir une illustration : l'impression choisie est ajoutée selon la cible courante.
-      openVersions(card, ev.target.closest('button'), (picked) => {
-        if (addTarget === 'champion' && picked.type === 'unit') setChampion(picked, false);
-        else if (addTarget === 'sideboard' && picked.type !== 'legend' && picked.type !== 'battlefield' && picked.type !== 'rune') addCard(picked, 'sideboard');
-        else addCard(picked);
-      });
+      // Choisir une illustration : remplace les exemplaires déjà dans le deck, sinon ajoute selon la cible courante.
+      openVersions(card, ev.target.closest('button'), pickPrinting);
       return;
     }
     if (act === 'add') addCard(card);
@@ -813,6 +1022,7 @@
     else if (act === 'champion') setChampion(card, false);
   });
   els.grid.addEventListener('contextmenu', (ev) => {
+    if (!finePointer()) return; // tactile : l'appui long ne retire rien (menu natif conservé)
     const art = ev.target.closest('.db-card');
     if (!art) return;
     ev.preventDefault();
@@ -832,7 +1042,10 @@
       filters.text = btn.dataset.tag;
       filters.type = '';
       filters.tab = 'all';
-      for (const t of els.tabs) t.classList.toggle('active', t.dataset.tab === 'all');
+      for (const t of els.tabs) {
+        t.classList.toggle('active', t.dataset.tab === 'all');
+        t.setAttribute('aria-selected', String(t.dataset.tab === 'all'));
+      }
       els.search.value = filters.text;
       els.type.value = '';
       applyFilters();
@@ -858,12 +1071,8 @@
         break;
       }
       case 'versions':
-        if (card) {
-          openVersions(card, btn, (picked) => {
-            Core.swapPrinting(deck, section, key, picked.id);
-            renderDeck();
-          });
-        }
+        // Même sélecteur que dans la galerie : l'illustration choisie s'applique à tous les exemplaires de la carte.
+        if (card) openVersions(card, btn, pickPrinting);
         return;
       case 'champion':
         if (card) setChampion(card, true);
@@ -888,6 +1097,7 @@
     renderDeck();
   });
   els.sections.addEventListener('contextmenu', (ev) => {
+    if (!finePointer()) return;
     const line = ev.target.closest('.db-line');
     if (!line) return;
     ev.preventDefault();
@@ -946,7 +1156,10 @@
   for (const tab of els.tabs) {
     tab.addEventListener('click', () => {
       filters.tab = tab.dataset.tab;
-      for (const t of els.tabs) t.classList.toggle('active', t === tab);
+      for (const t of els.tabs) {
+        t.classList.toggle('active', t === tab);
+        t.setAttribute('aria-selected', String(t === tab));
+      }
       // Un onglet ciblé rend le filtre « type » redondant : on le neutralise pour éviter un résultat vide.
       if (filters.tab !== 'all' && filters.type && !Core.TAB_TYPES[filters.tab].includes(filters.type)) {
         filters.type = '';
@@ -960,7 +1173,11 @@
   for (const btn of els.targets) {
     btn.addEventListener('click', () => {
       addTarget = btn.dataset.target;
-      for (const b of els.targets) b.classList.toggle('active', b === btn);
+      for (const b of els.targets) {
+        b.classList.toggle('active', b === btn);
+        b.setAttribute('aria-pressed', String(b === btn));
+      }
+      refreshAddTargetHints();
     });
   }
 
@@ -1030,8 +1247,8 @@
 
   async function init() {
     try {
-      // `v=2` : contourne les anciennes copies mises en cache une heure par le navigateur.
-      const res = await fetch('/api/cards?v=2', { headers: { accept: 'application/json' }, cache: 'no-cache' });
+      // `v=3` : contourne les anciennes copies mises en cache par le navigateur (v3 : + illustrator / shortCode).
+      const res = await fetch('/api/cards?v=3', { headers: { accept: 'application/json' }, cache: 'no-cache' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       catalog = Array.isArray(data) ? data : data.cards || [];
@@ -1062,10 +1279,37 @@
 
     // Deck initial : celui demandé par ?deck=<id>, sinon le brouillon local.
     const initData = root.DECKBUILDER_INIT;
-    deck = initData ? loadInit(initData) : loadState() || Core.emptyDeck();
+    const draft = loadState();
+    deck = draft || Core.emptyDeck();
+    if (initData) {
+      const fromServer = loadInit(initData);
+      const draftHasCards = !!draft && SECTION_ORDER.some((k) => draft.sections[k].length > 0);
+      // Un brouillon non enregistré serait écrasé : autre deck, ou même deck mais modifié localement
+      // (F5 sur /deckbuilder?deck=X après des changements). On demande.
+      const sameDeck = draftHasCards && draft.deckId === initData.id;
+      const conflict = draftHasCards && (!sameDeck || Core.buildExport(draft, byId) !== Core.buildExport(fromServer, byId));
+      if (conflict && window.appConfirm) {
+        if (await confirmReplaceDraft(sameDeck)) deck = fromServer;
+        else toast(sameDeck ? 'Brouillon non enregistré conservé.' : 'Brouillon conservé — ouvre le deck depuis la liste pour le remplacer.');
+      } else {
+        deck = fromServer;
+      }
+      // L'URL ne garde pas ?deck= : un rechargement repart du brouillon local (qui connaît deckId) au lieu de
+      // recharger la version enregistrée par-dessus.
+      history.replaceState(null, '', '/deckbuilder');
+    }
 
     applyFilters();
     renderDeck();
+    refreshAddTargetHints();
+  }
+
+  /** Boîte de confirmation du projet (appConfirm) : « Remplacer » / « Garder le brouillon ». */
+  function confirmReplaceDraft(sameDeck) {
+    const message = sameDeck
+      ? 'Ce deck a des modifications non enregistrées dans le brouillon local. Les remplacer par la version enregistrée ?'
+      : 'Un brouillon non enregistré existe. Le remplacer par ce deck ?';
+    return window.appConfirm(message, { title: 'Brouillon existant', ok: 'Remplacer', cancel: 'Garder le brouillon', icon: '📝' });
   }
 
   init();

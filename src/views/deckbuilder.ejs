@@ -6,23 +6,23 @@
     <!-- Onglets façon Piltover Archive : construction du deck en plusieurs temps -->
     <div class="db-toolbar">
       <div class="db-tabs" role="tablist" id="db-tabs">
-        <button type="button" class="db-tab active" data-tab="legend" role="tab"><img src="<%= (meta.types.find(t => t.id === 'legend') || {}).icon || '' %>" alt="">Légende</button>
-        <button type="button" class="db-tab" data-tab="main" role="tab"><img src="<%= (meta.types.find(t => t.id === 'unit') || {}).icon || '' %>" alt="">Deck principal</button>
-        <button type="button" class="db-tab" data-tab="battlefields" role="tab"><img src="<%= (meta.types.find(t => t.id === 'battlefield') || {}).icon || '' %>" alt="">Champs de bataille</button>
-        <button type="button" class="db-tab" data-tab="runes" role="tab"><img src="<%= (meta.types.find(t => t.id === 'rune') || {}).icon || '' %>" alt="">Runes</button>
-        <button type="button" class="db-tab" data-tab="all" role="tab">Tout</button>
+        <button type="button" class="db-tab active" data-tab="legend" role="tab" aria-selected="true"><img src="<%= (meta.types.find(t => t.id === 'legend') || {}).icon || '' %>" alt="">Légende</button>
+        <button type="button" class="db-tab" data-tab="main" role="tab" aria-selected="false"><img src="<%= (meta.types.find(t => t.id === 'unit') || {}).icon || '' %>" alt="">Deck principal</button>
+        <button type="button" class="db-tab" data-tab="battlefields" role="tab" aria-selected="false"><img src="<%= (meta.types.find(t => t.id === 'battlefield') || {}).icon || '' %>" alt="">Champs de bataille</button>
+        <button type="button" class="db-tab" data-tab="runes" role="tab" aria-selected="false"><img src="<%= (meta.types.find(t => t.id === 'rune') || {}).icon || '' %>" alt="">Runes</button>
+        <button type="button" class="db-tab" data-tab="all" role="tab" aria-selected="false">Tout</button>
       </div>
       <div class="db-target" title="Où envoyer la carte au clic">
         <span class="muted">Ajouter à :</span>
-        <button type="button" class="db-target-btn active" data-target="deck" title="Deck (section selon le type de carte)">🃏 Deck</button>
-        <button type="button" class="db-target-btn" data-target="sideboard" title="Réserve (sideboard)">📦 Réserve</button>
-        <button type="button" class="db-target-btn" data-target="champion" title="Définir comme champion (unités)">★ Champion</button>
+        <button type="button" class="db-target-btn active" data-target="deck" aria-pressed="true" title="Deck (section selon le type de carte)">🃏 Deck</button>
+        <button type="button" class="db-target-btn" data-target="sideboard" aria-pressed="false" title="Réserve (sideboard)">📦 Réserve</button>
+        <button type="button" class="db-target-btn" data-target="champion" aria-pressed="false" title="Définir comme champion (unités)">★ Champion</button>
       </div>
     </div>
 
     <div class="db-searchbar">
       <input type="search" id="db-search" placeholder="Rechercher une carte (nom, tag, code)… — touche /" autocomplete="off" spellcheck="false">
-      <select id="db-sort" title="Tri">
+      <select id="db-sort" title="Tri" aria-label="Trier les cartes">
         <option value="name">Nom</option>
         <option value="energy">Coût</option>
         <option value="set">Extension + n°</option>
@@ -69,15 +69,15 @@
       <div class="db-drawer-block db-ranges">
         <div class="db-range" data-range="energy">
           <div class="db-range-head"><h4>Énergie</h4><span class="muted" data-range-label>Tout</span></div>
-          <div class="db-range-inputs"><input type="range" min="0" max="12" value="0" data-min><input type="range" min="0" max="12" value="12" data-max></div>
+          <div class="db-range-inputs"><input type="range" min="0" max="12" value="0" data-min aria-label="Énergie minimum"><input type="range" min="0" max="12" value="12" data-max aria-label="Énergie maximum"></div>
         </div>
         <div class="db-range" data-range="power">
           <div class="db-range-head"><h4>Puissance</h4><span class="muted" data-range-label>Tout</span></div>
-          <div class="db-range-inputs"><input type="range" min="0" max="4" value="0" data-min><input type="range" min="0" max="4" value="4" data-max></div>
+          <div class="db-range-inputs"><input type="range" min="0" max="4" value="0" data-min aria-label="Puissance minimum"><input type="range" min="0" max="4" value="4" data-max aria-label="Puissance maximum"></div>
         </div>
         <div class="db-range" data-range="might">
           <div class="db-range-head"><h4>Force</h4><span class="muted" data-range-label>Tout</span></div>
-          <div class="db-range-inputs"><input type="range" min="0" max="10" value="0" data-min><input type="range" min="0" max="10" value="10" data-max></div>
+          <div class="db-range-inputs"><input type="range" min="0" max="10" value="0" data-min aria-label="Force minimum"><input type="range" min="0" max="10" value="10" data-max aria-label="Force maximum"></div>
         </div>
       </div>
       <div class="db-drawer-foot">
@@ -88,7 +88,8 @@
     </div>
 
     <div class="db-gallery-status">
-      <span class="muted db-help">Clic gauche : ajouter · clic droit : retirer · <b>★</b> champion · <b>R</b> réserve. Survole une carte pour la zoomer.</span>
+      <span class="muted db-help db-help-mouse">Clic gauche : ajouter · clic droit : retirer · <b>−</b> / <b>+</b> exemplaires · <b>★</b> champion · <b>R</b> réserve · <b>🎨</b> choisir l'illustration (versions alternatives). Survole une carte pour la zoomer.</span>
+      <span class="muted db-help db-help-touch">Touche une carte pour l'ajouter · <b>−</b> pour retirer · <b>★</b> champion · <b>R</b> réserve · <b>🎨</b> pour les versions.</span>
       <span class="muted" id="db-result-count">Chargement du catalogue…</span>
     </div>
     <div class="db-grid" id="db-grid"></div>
@@ -100,7 +101,7 @@
   <!-- Deck en construction -->
   <aside class="card db-deck" id="db-deck">
     <div class="db-deck-head">
-      <input type="text" id="db-name" placeholder="Nom du deck" maxlength="80" autocomplete="off">
+      <input type="text" id="db-name" placeholder="Nom du deck" aria-label="Nom du deck" maxlength="80" autocomplete="off">
       <p class="muted db-deck-source" id="db-deck-source" hidden></p>
     </div>
 
@@ -108,18 +109,26 @@
 
     <div id="db-sections"></div>
 
-    <div class="db-actions">
+    <!-- Actions collées en bas du panneau. Deck existant : « Mettre à jour » est l'action principale (dorée, en premier). -->
+    <div class="db-actions" id="db-actions">
+      <button type="button" class="btn btn-gold" id="db-update" hidden>Mettre à jour le deck</button>
       <button type="button" class="btn btn-gold" id="db-save">Enregistrer comme deck</button>
-      <button type="button" class="btn" id="db-update" hidden>Mettre à jour le deck</button>
       <button type="button" class="btn btn-ghost" id="db-import">Importer une decklist</button>
       <button type="button" class="btn btn-ghost" id="db-clear">Vider</button>
     </div>
 
-    <details class="db-export" open>
+    <details class="db-export">
       <summary>Export texte <button type="button" class="btn btn-ghost btn-small" id="db-copy">Copier</button></summary>
       <textarea id="db-export-text" rows="14" readonly spellcheck="false"></textarea>
     </details>
   </aside>
+</div>
+
+<!-- Mobile (≤ 960 px) : barre fixe en bas, alimentée par renderDeck() — compteurs, légalité, saut galerie ↔ deck -->
+<div class="db-mobile-bar" id="db-mobile-bar" role="region" aria-label="Résumé du deck">
+  <span class="db-mobile-dot" id="db-mobile-dot" aria-hidden="true"></span>
+  <span class="db-mobile-counters" id="db-mobile-counters" aria-live="polite"></span>
+  <button type="button" class="btn btn-small btn-gold" id="db-mobile-jump" aria-controls="db-deck">Voir le deck ▲</button>
 </div>
 
 <!-- Import d'une decklist collée -->

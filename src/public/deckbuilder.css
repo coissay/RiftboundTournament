@@ -6,8 +6,6 @@ main:has(.db-layout) { max-width: 1500px; }
 
 .db-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); gap: 1rem; align-items: start; }
 .db-gallery, .db-deck { margin: 0; min-width: 0; } /* min-width:0 : un enfant de grille ne doit pas élargir la page sur mobile */
-/* Le panneau deck reste visible pendant qu'on fait défiler la galerie. */
-@media (min-width: 961px) { .db-deck { position: sticky; top: 4.2rem; max-height: calc(100vh - 5rem); overflow-y: auto; } }
 
 /* ---- Barre d'outils : onglets + cible d'ajout ---- */
 .db-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
@@ -71,6 +69,12 @@ main:has(.db-layout) { max-width: 1500px; }
 .db-spacer { flex: 1; }
 .db-gallery-status { display: flex; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
 .db-help { margin: 0; font-size: 0.82rem; }
+/* Aide : version souris par défaut, version tactile quand il n'y a pas de vrai survol. */
+.db-help-touch { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .db-help-mouse { display: none; }
+  .db-help-touch { display: inline; }
+}
 
 /* Versions alternatives */
 .db-variants-toggle { font-size: 0.9rem; cursor: pointer; }
@@ -92,15 +96,34 @@ main:has(.db-layout) { max-width: 1500px; }
   background: rgba(10, 17, 32, 0.9); color: var(--text); font-weight: 700; font-size: 0.8rem;
   padding: 0.1rem 0.35rem; border-radius: 6px; border: 1px solid var(--border);
 }
-.db-card-name { font-size: 0.8rem; line-height: 1.2; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 0.2rem; }
-.db-card-actions { display: flex; gap: 0.25rem; justify-content: center; }
+.db-card-name {
+  font-size: 0.8rem; line-height: 1.2; text-align: center; padding: 0 0.2rem;
+  /* Deux lignes max (« Fiora, Peerless », « Brynhir Thundersong »…), hauteur fixe pour aligner la grille. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; overflow: hidden; min-height: 2.4em;
+}
+.db-card-actions { display: flex; gap: 0.3rem; justify-content: center; align-items: center; flex-wrap: wrap; }
+/* Boutons d'action (galerie et panneau deck) : cibles d'au moins 28 px. */
 .db-card-actions button, .db-line button, .db-icon-btn {
   background: var(--bg-card-2); border: 1px solid var(--border); color: var(--text);
-  border-radius: 6px; min-width: 1.7rem; height: 1.7rem; padding: 0 0.4rem;
-  font-size: 0.85rem; font-family: inherit; cursor: pointer; line-height: 1;
+  border-radius: 6px; min-width: 28px; height: 28px; padding: 0 0.4rem;
+  font-size: 0.9rem; font-family: inherit; cursor: pointer; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .db-card-actions button:hover, .db-line button:hover, .db-icon-btn:hover { border-color: var(--gold); color: var(--gold); }
-.db-card-actions button[data-act="champion"] { color: var(--gold); }
+.db-card-actions button:focus-visible, .db-line button:focus-visible, .db-icon-btn:focus-visible, .db-versions-badge:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.db-card-actions button[data-act="champion"], .db-line button[data-act="champion"] { color: var(--gold); }
+
+/* Compteur « − [qté] + » : même ordre partout (galerie et liste du deck). */
+.db-stepper { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
+.db-stepper button { border: none; border-radius: 0; background: transparent; min-width: 28px; height: 28px; }
+.db-stepper button:hover { background: var(--bg-card-2); }
+.db-stepper button:first-child { border-radius: 6px 0 0 6px; }
+.db-stepper button:last-child { border-radius: 0 6px 6px 0; }
+.db-stepper-qty { min-width: 1.4rem; text-align: center; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.db-stepper-qty:empty { min-width: 0.4rem; }
+.db-line.over .db-stepper-qty { color: #fbbf24; }
+/* Séparation visuelle entre le compteur et les actions secondaires (★ champion, R réserve, 🎨 versions). */
+.db-actions-sep { display: inline-block; width: 1px; height: 18px; background: var(--border); margin: 0 0.15rem; }
 .db-more { text-align: center; margin-top: 1rem; }
 .db-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 2rem; }
 
@@ -134,11 +157,15 @@ main:has(.db-layout) { max-width: 1500px; }
 .db-line-name { flex: 1; min-width: 0; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .db-line-name small { color: var(--muted); margin-left: 0.3rem; }
 .db-line-name .warn { font-size: 0.8rem; }
-.db-line-qty { font-weight: 700; color: var(--gold); min-width: 1.6rem; text-align: right; font-variant-numeric: tabular-nums; }
-.db-line-qty.over { color: #fbbf24; }
-.db-line button { min-width: 1.5rem; height: 1.5rem; padding: 0 0.3rem; font-size: 0.8rem; }
+.db-line .db-stepper { flex: none; }
+.db-line button { padding: 0 0.3rem; font-size: 0.85rem; }
+.db-line .db-stepper button { min-width: 26px; height: 26px; }
+.db-line .db-stepper-qty { font-size: 0.85rem; }
 
-.db-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+/* Actions collées en bas du panneau : sur desktop .db-deck (ci-dessus) est sticky et défile en interne
+   (overflow-y:auto), le bloc reste donc visible pendant qu'on parcourt les sections ; sur mobile (≤ 960 px)
+   il redevient statique, la barre de résumé fixe prend le relais. */
+.db-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; position: sticky; bottom: 0; z-index: 2; background: var(--bg-card); padding: 0.6rem 0 0.4rem; margin: -0.2rem 0; border-top: 1px solid var(--border); box-shadow: 0 -8px 12px -8px rgba(0, 0, 0, 0.6); }
 .db-export summary { cursor: pointer; font-size: 0.9rem; color: var(--muted); display: flex; align-items: center; gap: 0.6rem; }
 .db-export textarea { margin-top: 0.5rem; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 0.8rem; line-height: 1.35; }
 
@@ -160,29 +187,81 @@ main:has(.db-layout) { max-width: 1500px; }
 .db-layout [hidden] { display: none !important; }
 
 /* ---- Versions alternatives : badge, sélecteur, toast ---- */
+/* Badge « 🎨 N versions » en haut à droite de la vignette : cliquable, ouvre le sélecteur d'illustration. */
 .db-versions-badge {
-  position: absolute; right: 4px; top: 4px;
-  background: rgba(10, 17, 32, 0.9); color: var(--text); border: 1px solid var(--border);
-  border-radius: 6px; padding: 0.1rem 0.35rem; font-size: 0.75rem; font-family: inherit; cursor: pointer; line-height: 1.3;
+  position: absolute; right: 4px; top: 4px; min-height: 24px;
+  background: rgba(10, 17, 32, 0.92); color: var(--text); border: 1px solid var(--gold-dark);
+  border-radius: 6px; padding: 0.15rem 0.4rem; font-size: 0.72rem; font-weight: 600; font-family: inherit; cursor: pointer; line-height: 1.3;
+  white-space: nowrap;
 }
-.db-versions-badge:hover { border-color: var(--gold); color: var(--gold); }
+.db-versions-badge:hover { border-color: var(--gold); color: var(--gold); background: rgba(10, 17, 32, 1); }
 .db-line-variant { color: var(--gold) !important; }
+.db-line-versions { color: var(--gold); }
 .db-versions {
   position: fixed; z-index: 1100; background: var(--bg-card); border: 1px solid var(--gold-dark); border-radius: 10px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); padding: 0.6rem; max-height: 70vh; overflow-y: auto;
 }
 .db-versions-head { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; font-size: 0.9rem; }
+.db-versions-head small { font-weight: 400; }
 .db-versions-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem; }
 .db-version { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem; cursor: pointer; color: var(--text); font-family: inherit; display: flex; flex-direction: column; gap: 0.3rem; align-items: stretch; }
 .db-version:hover { border-color: var(--gold); }
-.db-version.current { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
+.db-version:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.db-version.current { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold), 0 0 10px rgba(212, 169, 65, 0.25); }
 .db-version .card-thumb { box-shadow: none; }
-.db-version-label { font-size: 0.8rem; text-align: center; display: flex; flex-direction: column; }
-.db-version-label small { color: var(--muted); font-size: 0.7rem; }
+.db-version-label { font-size: 0.8rem; text-align: center; display: flex; flex-direction: column; gap: 0.05rem; }
+.db-version-label small { color: var(--muted); font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-version-label .db-version-current { color: var(--live); font-weight: 600; }
 .db-toast {
   position: fixed; left: 50%; bottom: 1.5rem; transform: translate(-50%, 20px); z-index: 1200;
   background: #2a1a1a; color: #ffd6d6; border: 1px solid var(--danger); border-radius: 10px; padding: 0.7rem 1rem;
   font-size: 0.92rem; max-width: min(560px, 90vw); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   opacity: 0; pointer-events: none; transition: opacity 0.15s, transform 0.15s;
 }
+/* Avertissement (message commençant par ⚠) : ambre comme .db-rules .ko ; info : neutre. Rouge réservé aux refus. */
+.db-toast.warn { background: #2a2210; color: #fde68a; border-color: #fbbf24; }
+.db-toast.info { background: var(--bg-card); color: var(--text); border-color: var(--gold-dark); }
 .db-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---- Indice de cible « Ajouter à » sur les boutons + de la galerie ---- */
+.db-grid[data-target="sideboard"] .db-stepper button[data-act="add"], .db-grid[data-target="champion"] .db-stepper button[data-act="add"] { color: var(--gold); }
+.db-grid[data-target="sideboard"] .db-stepper button[data-act="add"]::after { content: 'R'; font-size: 0.6rem; vertical-align: super; margin-left: 1px; }
+.db-grid[data-target="champion"] .db-stepper button[data-act="add"]::after { content: '★'; font-size: 0.6rem; vertical-align: super; margin-left: 1px; }
+
+/* ---- Tactile : cibles plus grandes ---- */
+@media (pointer: coarse) {
+  .db-card-actions button, .db-line button, .db-icon-btn, .db-stepper button, .db-line .db-stepper button { min-width: 2.4rem; height: 2.4rem; }
+  .db-range-inputs { height: 32px; }
+  .db-range-inputs::before { top: 14px; }
+  .db-range-inputs input[type="range"] { height: 32px; }
+  .db-range-inputs input[type="range"]::-webkit-slider-thumb { width: 24px; height: 24px; }
+  .db-range-inputs input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; }
+}
+
+/* ---- Mobile (≤ 960 px) : barre de résumé fixe en bas + sections repliables ---- */
+.db-mobile-bar { display: none; }
+@media (max-width: 960px) {
+  .db-mobile-bar {
+    display: flex; align-items: center; gap: 0.6rem;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; /* au-dessus de la .tabbar (z-index 20) */
+    padding: 0.45rem 0.8rem calc(0.45rem + env(safe-area-inset-bottom));
+    background: rgba(10, 17, 32, 0.96); backdrop-filter: blur(8px); border-top: 1px solid var(--border);
+    font-size: 0.82rem;
+  }
+  .db-mobile-counters { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-variant-numeric: tabular-nums; }
+  .db-mobile-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: #fbbf24; box-shadow: 0 0 6px #fbbf24; }
+  .db-mobile-dot.ok { background: var(--live); box-shadow: 0 0 6px var(--live); }
+  #db-mobile-jump { white-space: nowrap; }
+  main:has(.db-layout) { padding-bottom: 5rem; }
+  /* Sections du deck repliables (details) : la flèche native est masquée, le h3 fait office de résumé. */
+  .db-section > summary { list-style: none; cursor: pointer; }
+  .db-section > summary::-webkit-details-marker { display: none; }
+  .db-section > summary h3::before { content: '▾'; color: var(--muted); margin-right: 0.35rem; font-size: 0.8rem; }
+  .db-section:not([open]) > summary h3::before { content: '▸'; }
+  .db-actions { position: static; box-shadow: none; }
+}
+@media (max-width: 720px) {
+  /* La .tabbar du site (≈ 3.9 rem + zone sûre) occupe le bas : la barre deck se pose juste au-dessus. */
+  .db-mobile-bar { bottom: calc(3.9rem + env(safe-area-inset-bottom)); padding-bottom: 0.45rem; }
+  main:has(.db-layout) { padding-bottom: 9rem; }
+}

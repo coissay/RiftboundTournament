@@ -6,11 +6,16 @@ import { catalogForClient, catalogMeta, resolveDecklist, normalizeName } from '.
 const router = Router();
 
 /**
- * Résout une decklist texte et rattache chaque ligne à l'id de la carte telle que le client la connaît
- * (le catalogue client ne garde qu'une impression par nom : on passe donc par le nom).
+ * Résout une decklist texte et rattache chaque ligne à l'id de la carte telle que le client la connaît.
+ * Une ligne avec code de collection (« 3 Fiora, Peerless (SFD-110a) ») est résolue vers cette impression
+ * précise : c'est son id qui est renvoyé, pour que le builder réaffiche l'art choisi. Sans code, l'impression
+ * de base ; si l'impression résolue n'existe pas côté client (sans image), repli sur la principale du nom.
  */
 function linesForClient(text) {
-  const idByName = new Map(catalogForClient().filter((c) => c.primary).map((c) => [normalizeName(c.name), c.id]));
+  const client = catalogForClient();
+  const clientIds = new Set(client.map((c) => c.id));
+  const idByName = new Map(client.filter((c) => c.primary).map((c) => [normalizeName(c.name), c.id]));
+  const cardIdFor = (card) => (clientIds.has(card.id) ? card.id : idByName.get(normalizeName(card.name)) || null);
   const resolved = resolveDecklist(text);
   return {
     unknown: resolved.unknown,
@@ -20,7 +25,7 @@ function linesForClient(text) {
       cards: s.cards.map((line) => ({
         qty: line.qty,
         name: line.card ? line.card.name : line.name,
-        cardId: line.card ? idByName.get(normalizeName(line.card.name)) || null : null,
+        cardId: line.card ? cardIdFor(line.card) : null,
         // Nom écrit sans sous-titre (« Fiora ») rattaché par repli : `candidates` = noms complets possibles.
         ...(line.ambiguous ? { ambiguous: true, written: line.name, candidates: line.candidates } : {}),
       })),
@@ -52,7 +57,7 @@ router.get('/deckbuilder', requireAuth, async (req, res, next) => {
   }
 });
 
-// Catalogue allégé (une impression par nom) + référentiels (icônes) pour le filtrage côté client.
+// Catalogue allégé (toutes les impressions avec image, une principale par nom) + référentiels (icônes) pour le client.
 router.get('/api/cards', requireAuth, (req, res) => {
   // Revalidation à chaque chargement (ETag → 304 si inchangé) : pas de catalogue périmé côté navigateur.
   res.set('Cache-Control', 'private, no-cache');
@@ -62,6 +67,7 @@ router.get('/api/cards', requireAuth, (req, res) => {
 // Import d'une decklist collée dans le builder : renvoie les lignes avec l'id de carte trouvé.
 router.post('/api/decklist/resolve', requireAuth, (req, res) => {
   const text = typeof req.body?.text === 'string' ? req.body.text.slice(0, 20000) : '';
+  if (!text.trim()) return res.status(400).json({ error: 'Liste vide ou illisible.' });
   res.json(linesForClient(text));
 });
 

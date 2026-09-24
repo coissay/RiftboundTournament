@@ -1,4 +1,7 @@
 <%
-/* Attend : name (string), cardImage (fonction nom → {image, landscape} | null). Rend un nom survolable (popover). */
+/* Attend : name (string), cardImage (fonction nom → {image, landscape} | null), label (optionnel : texte affiché
+   à la place de name — ex. nom catalogue nu d'une ligne « Fiora, Peerless (SFD-110a) », l'image restant celle
+   de l'impression désignée par name). Rend un nom survolable (popover). */
 const ci = cardImage ? cardImage(name) : null;
-%><% if (ci) { %><span class="card-name" data-full="<%= ci.image %>"<%= ci.landscape ? ' data-landscape' : '' %>><%= name %></span><% } else { %><%= name %><% } %>
+const shown = typeof label !== 'undefined' && label ? label : name;
+%><% if (ci) { %><span class="card-name" data-full="<%= ci.image %>"<%= ci.landscape ? ' data-landscape' : '' %>><%= shown %></span><% } else { %><%= shown %><% } %>

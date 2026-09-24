@@ -8,6 +8,9 @@ import { parseDecklist, findCard, normalizeName, SECTIONS } from './cards.js';
 const SECTION_LABEL = Object.fromEntries(SECTIONS.map((s) => [s.key, s.label]));
 
 // Lignes de la decklist à plat : clé = section + nom canonique (catalogue si reconnu).
+// Décision : les impressions d'une même carte (« Fiora, Peerless » / « Fiora, Peerless (SFD-110a) ») sont
+// une seule carte ici — un simple changement d'illustration ne crée donc pas de nouvelle version du deck
+// (sameCards reste vrai), seul le texte `deck.cards` est mis à jour.
 export function flattenCards(text) {
   const map = new Map();
   for (const section of parseDecklist(text)) {
